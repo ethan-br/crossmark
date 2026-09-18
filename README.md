@@ -25,7 +25,18 @@ npm run build
 ```
 
 - **Chromium / Chrome / Helium:** open the extensions manager, enable Developer mode, choose **Load unpacked**, and select `dist/chromium`.
-- **Firefox:** open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `dist/firefox/manifest.json`. Temporary installations disappear at browser shutdown; signed distribution is not included.
+- **Firefox development install:** open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `dist/firefox/manifest.json`. Do not select the folder or use Firefox's Add-ons Manager for this step. Temporary installations disappear at browser shutdown.
+- **Firefox package:** run `npm run package:firefox`. This creates `dist/crossmark-firefox.xpi` with `manifest.json` at the archive root. The archive is suitable for testing through **Load Temporary Add-on**. A normal Firefox release will reject an unsigned development XPI with “appears to be corrupt”; permanent installation requires signing/distribution through [addons.mozilla.org](https://addons.mozilla.org/developers/).
+
+To create a signed, self-distributed Firefox package, create AMO API credentials at [AMO API keys](https://addons.mozilla.org/developers/addon/api/key/), then run:
+
+```sh
+export AMO_JWT_ISSUER='your-amo-jwt-issuer'
+export AMO_JWT_SECRET='your-amo-jwt-secret'
+npm run sign:firefox
+```
+
+The signed XPI is written under `dist/signed/` and copied to `dist/crossmark-firefox-signed.xpi`. `web-ext sign` submits the package to Mozilla's Add-ons signing service; the signature cannot be generated entirely offline. Keep both variables out of Git and out of the browser extension.
 
 There is no web preview or preview tunnel. Test the built extensions in headless browsers or install them manually. For use on a remote computer, configure a Convex cloud deployment and rebuild with its public HTTPS endpoints; see [Google OAuth setup](docs/google-oauth-setup.md).
 

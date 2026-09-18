@@ -89,3 +89,19 @@ Sign in with the same account in the second browser and approve its merge if it 
 - **Sign-in required:** sign in with the same Google account again. Pending changes remain local. Export is available without a valid session; pausing also works without network access.
 
 Implementation references: [Convex Better Auth integration](https://labs.convex.dev/better-auth/framework-guides/react), [Better Auth bearer sessions](https://www.better-auth.com/docs/plugins/bearer).
+
+## Firefox installation note
+
+For local development, use **about:debugging → This Firefox → Load Temporary Add-on** and choose `dist/firefox/manifest.json`. Firefox reads that manifest directly from the build directory. If you use an archive, run `npm run package:firefox`; the resulting `dist/crossmark-firefox.xpi` has the manifest at its root. Zipping the `dist/firefox` directory itself creates `firefox/manifest.json` one level down and Firefox reports that archive as corrupt.
+
+The regular Add-ons Manager only accepts signed packages in a standard Firefox release. An unsigned local XPI commonly produces the same “appears to be corrupt” message even when its manifest is valid. Use the temporary-install flow while developing, or submit the package to AMO for signing before trying a permanent installation.
+
+To sign a self-distributed package from this project, create AMO API credentials at [AMO API keys](https://addons.mozilla.org/developers/addon/api/key/), keep them only in your shell, and run:
+
+```sh
+export AMO_JWT_ISSUER='your-amo-jwt-issuer'
+export AMO_JWT_SECRET='your-amo-jwt-secret'
+npm run sign:firefox
+```
+
+The signed XPI is placed in `dist/signed/` and copied to `dist/crossmark-firefox-signed.xpi`. `web-ext sign` uses Mozilla's Add-ons signing API; “locally” means the command and credentials stay on your machine, while Mozilla performs the actual signature. This project uses the `unlisted` channel for private testing. Do not commit the credentials or put them in `.env`, `VITE_` variables or extension files.
