@@ -1,5 +1,5 @@
 import { authenticatedBackend } from './fixtures/auth';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { api } from '../convex/_generated/api';
 import { Engine } from '../apps/extension/src/engine';
 import { Adapter } from '../apps/extension/src/adapter';
@@ -351,4 +351,52 @@ it('rejects changing Google accounts on an existing installation', async () => {
   expect(state.account).toEqual(previous.account);
   expect(state.deviceId).toBe(previous.deviceId);
   expect(state.needsSignIn).toBe(true);
+});
+
+it('records connection, reconciliation, retry and bookmark diagnostics without content', async () => {
+  const { debug } = await import('../apps/extension/src/debug');
+  const consoleSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+  debug.clear();
+  debug.setEnabled(true);
+  try {
+    const { device } = await setup();
+    const a = device('Private device');
+    await a.native.create({
+      parentId: '1',
+      title: 'Secret bookmark',
+      url: 'https://secret.example',
+    });
+    await a.engine.command({ type: 'connect', name: 'Private device' });
+    await a.engine.command({ type: 'pause' });
+    await a.engine.sync();
+    await a.engine.command({ type: 'pause' });
+    const query = vi
+      .spyOn(a.transport, 'query')
+      .mockRejectedValue(new Error('network https://secret.example'));
+    await a.engine.sync();
+    await a.engine.sync();
+    query.mockRestore();
+    await a.engine.command({ type: 'sync' });
+    await a.engine.command({ type: 'disconnect' });
+    const exported = debug.export();
+    const entries = JSON.parse(exported).entries;
+    for (const [operation, outcome] of [
+      ['command.connect', 'success'],
+      ['command.disconnect', 'success'],
+      ['bookmarks.read', 'success'],
+      ['sync.capture', 'success'],
+      ['sync.project', 'success'],
+      ['sync.exchange', 'paused'],
+      ['sync.exchange', 'failure'],
+      ['sync.retry', 'scheduled'],
+      ['sync.retry', 'backoff'],
+    ])
+      expect(entries).toContainEqual(expect.objectContaining({ operation, outcome }));
+    for (const secret of ['Private device', 'Secret bookmark', 'https://secret.example'])
+      expect(exported).not.toContain(secret);
+  } finally {
+    debug.setEnabled(false);
+    debug.clear();
+    consoleSpy.mockRestore();
+  }
 });
