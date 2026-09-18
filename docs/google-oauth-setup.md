@@ -1,0 +1,91 @@
+# Google OAuth setup
+
+Google is the only login provider. No Google OAuth client exists for this project yet, so live sign-in has not been tested. No email/password, email code or manual device enrollment flow is enabled.
+
+## 1. Choose the backend
+
+For local development, run `npm run backend`. The normal local addresses are:
+
+- Convex functions: `http://127.0.0.1:3210`
+- Convex HTTP/auth routes: `http://127.0.0.1:3211`
+
+For login from remote computers, create a Convex cloud deployment and run `npx convex dev` against it. Use its `https://<deployment>.convex.cloud` functions URL and `https://<deployment>.convex.site` HTTP URL. A remote extension cannot reach another computer's loopback addresses. A stable cloud URL also avoids changing OAuth settings whenever a temporary tunnel changes.
+
+Set `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` in `.env.local` to those two **origins**, without trailing slashes. The backend uses Convex's built-in `CONVEX_SITE_URL`; it must correspond to `VITE_CONVEX_SITE_URL`. A production deployment uses `npx convex deploy` and the production environment variables separately.
+
+## 2. Create the Google web client
+
+In [Google Cloud Console](https://console.cloud.google.com/), select or create a project. Under **Google Auth Platform**:
+
+1. Configure Branding, support email and developer contact information.
+2. Choose the audience. For an external app in Testing, add each Google account used in the test under Test users.
+3. Create a client with application type **Web application**.
+4. Add this **Authorized redirect URI**, replacing the origin with your backend's HTTP origin:
+
+   ```text
+   https://<deployment>.convex.site/api/auth/callback/google
+   ```
+
+   For the default local backend, use `http://127.0.0.1:3211/api/auth/callback/google`. If using `localhost` instead, use it consistently in both backend configuration and the registered callback. Google requires an exact match.
+
+5. Save the client ID and client secret. This flow only needs the standard identity scopes `openid`, `email` and `profile`. It does not request Chrome Sync, bookmarks, Drive or other Google API scopes. No authorized JavaScript origin is needed for this server-side redirect flow.
+
+The extension's `chromiumapp.org` / `extensions.allizom.org` URLs belong in Better Auth's trusted origins below, **not** in Google's redirect URI field. Google returns to Convex; Convex then returns to the extension.
+
+Reference: [Better Auth Google provider setup](https://www.better-auth.com/docs/authentication/google).
+
+## 3. Configure Convex secrets
+
+Set these in the selected deployment's **Convex dashboard → Settings → Environment Variables**, or use `npx convex env set NAME VALUE` locally. Use `--prod` only when intentionally configuring production.
+
+| Variable               | Value                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `GOOGLE_CLIENT_ID`     | Google's web client ID                                                             |
+| `GOOGLE_CLIENT_SECRET` | Google's web client secret                                                         |
+| `BETTER_AUTH_SECRET`   | A random secret of at least 32 characters; generate with `openssl rand -base64 48` |
+| `AUTH_TRUSTED_ORIGINS` | Comma-separated origins from the next section                                      |
+
+A random `BETTER_AUTH_SECRET` is already set on this workspace's local deployment. Do not rotate it during ordinary rebuilds: rotation invalidates sessions. New/cloud deployments need their own secret. Keep secrets out of source files and all `VITE_` variables; only backend URLs are bundled in the extension.
+
+## 4. Configure trusted origins
+
+With the checked-in Chromium public manifest key, the unpacked extension ID is `eblopgfhjccjncfjmgcjfahaggkcolok`. Firefox's stable add-on ID is `crossmark@crossmark.local`. Start `AUTH_TRUSTED_ORIGINS` with this comma-separated value:
+
+```text
+chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok,https://eblopgfhjccjncfjmgcjfahaggkcolok.chromiumapp.org,https://e75a80704b2a90a50aa2f2ce7d240a397e57b612.extensions.allizom.org
+```
+
+Firefox's `moz-extension://` origin is unique to each browser profile. After loading the extension, open **about:debugging → Crossmark → Inspect**. In its console, run:
+
+```js
+browser.runtime.getURL('').replace(/\/$/, '');
+browser.identity.getRedirectURL('auth');
+```
+
+Append the returned `moz-extension://<uuid>` origin to `AUTH_TRUSTED_ORIGINS`. Keep every Firefox profile you intend to use in the comma-separated list. Reinstalling can change that origin. The redirect should be the stable `https://e75a80704b2a90a50aa2f2ce7d240a397e57b612.extensions.allizom.org/auth`; if the add-on ID changes, use the actual returned origin instead.
+
+For Chromium, inspect the service worker from the extensions manager and verify `chrome.runtime.id` and `chrome.identity.getRedirectURL('auth')`. Keep `scripts/chromium-key.json` stable across local builds. It contains only the public key, not a signing private key. Store distribution or a different key may change the ID and require updated trusted origins.
+
+Do not copy the temporary Firefox origin from headless test output into a permanent configuration; it belongs to a disposable profile. Exact origin registration is used in this v0. See [Better Auth trusted origins](https://www.better-auth.com/docs/reference/security) for how request origins and redirect destinations are checked.
+
+## 5. Rebuild and verify
+
+```sh
+npm run build
+npx convex run auth:configuration
+```
+
+The query should return `googleConfigured: true`. This confirms both environment values exist, not that Google accepts them. Reload the extension in each browser, open it, enter a browser name, and click **Sign in with Google**. Complete Google's consent screen. Browser identity APIs return the result to the background even if the popup closes; reopen it to see sync status.
+
+Sign in with the same account in the second browser and approve its merge if it has bookmarks. Follow [the manual test checklist](test-plan.md). Live OAuth consent, callback completion, session refresh and cross-browser sync with real Google sessions remain unverified until these credentials are configured.
+
+## Troubleshooting
+
+- **Google login is not configured:** set both Google variables on the deployment the built extension actually uses.
+- **redirect_uri_mismatch:** compare Google's registered URI against the backend HTTP origin plus `/api/auth/callback/google`, including scheme, host and port.
+- **Invalid origin / callback URL:** add the exact request origin and extension redirect origin to `AUTH_TRUSTED_ORIGINS`; Firefox's profile UUID can change.
+- **Access blocked while Testing:** add the chosen account as a Google test user and check the configured audience.
+- **Network/CSP failure:** verify both `.env.local` backend URLs, rebuild and reload. Both origins must appear in the generated manifest's host permissions and connection policy.
+- **Sign-in required:** sign in with the same Google account again. Pending changes remain local. Export is available without a valid session; pausing also works without network access.
+
+Implementation references: [Convex Better Auth integration](https://labs.convex.dev/better-auth/framework-guides/react), [Better Auth bearer sessions](https://www.better-auth.com/docs/plugins/bearer).

@@ -1,0 +1,788 @@
+#cm-extension-mock {
+  --cm-bg: light-dark(#ffffff, #202322);
+  --cm-soft: light-dark(#f5f6f4, #292d2a);
+  --cm-text: light-dark(#202b26, #edf2ee);
+  --cm-muted: light-dark(#69756e, #a7b4ac);
+  --cm-line: light-dark(#e7ebe7, #3b433d);
+  --cm-accent: light-dark(#247653, #8cd5ac);
+  --cm-wash: light-dark(#eef7f0, #263d30);
+  --cm-on: light-dark(#ffffff, #162a1e);
+  --cm-amber: light-dark(#95621a, #e9bd71);
+  --cm-error: light-dark(#b74a3b, #ffa799);
+  --cm-radius: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--cm-text);
+  width: 100%;
+  padding: 18px 0 24px;
+  box-sizing: border-box;
+}
+#cm-extension-mock * {
+  box-sizing: border-box;
+}
+#cm-extension-mock button,
+#cm-extension-mock input {
+  font: inherit;
+}
+#cm-extension-mock button {
+  cursor: pointer;
+  color: inherit;
+}
+#cm-extension-mock button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+#cm-extension-mock [hidden] {
+  display: none !important;
+}
+#cm-extension-mock .cm-window {
+  max-width: 392px;
+  margin: 0 auto;
+  background: var(--cm-bg);
+  border: 1px solid var(--cm-line);
+  border-radius: var(--cm-radius);
+  box-shadow: 0 14px 40px light-dark(#16291c16, #00000032);
+  overflow: hidden;
+}
+#cm-extension-mock .cm-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 17px 20px 15px;
+}
+#cm-extension-mock .cm-brand {
+  width: 29px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: var(--cm-text);
+  color: var(--cm-bg);
+  border-radius: 8px;
+}
+#cm-extension-mock .cm-brand svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.8;
+}
+#cm-extension-mock .cm-wordmark {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.6px;
+  flex: 1;
+}
+#cm-extension-mock .cm-icon-button {
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  padding: 0;
+  color: var(--cm-muted);
+}
+#cm-extension-mock .cm-icon-button:hover {
+  background: var(--cm-soft);
+  color: var(--cm-text);
+}
+#cm-extension-mock svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  stroke-width: 1.7;
+}
+#cm-extension-mock .cm-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--cm-line);
+  padding: 0 20px;
+  gap: 23px;
+}
+#cm-extension-mock .cm-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 9px 0 12px;
+  color: var(--cm-muted);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#cm-extension-mock .cm-tab[aria-current='page'] {
+  border-color: var(--cm-accent);
+  color: var(--cm-text);
+}
+#cm-extension-mock .cm-tab-count {
+  font-size: 11px;
+  border-radius: 5px;
+  background: var(--cm-soft);
+  padding: 0 5px;
+  color: var(--cm-muted);
+}
+#cm-extension-mock .cm-content {
+  padding: 20px;
+}
+#cm-extension-mock .cm-status {
+  background: var(--cm-wash);
+  border-radius: 12px;
+  padding: 21px 18px 17px;
+}
+#cm-extension-mock .cm-status-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 13px;
+}
+#cm-extension-mock .cm-check {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  background: var(--cm-accent);
+  color: var(--cm-on);
+  border-radius: 50%;
+}
+#cm-extension-mock .cm-status-label {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--cm-accent);
+}
+#cm-extension-mock h2 {
+  font-size: 23px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -0.65px;
+  margin: 0 0 5px;
+  color: var(--cm-text);
+}
+#cm-extension-mock p {
+  margin: 0;
+}
+#cm-extension-mock .cm-secondary {
+  color: var(--cm-muted);
+  font-size: 12px;
+}
+#cm-extension-mock .cm-state-desc {
+  color: var(--cm-muted);
+  font-size: 13px;
+  min-height: 20px;
+}
+#cm-extension-mock .cm-status-bottom {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, var(--cm-accent) 15%, transparent);
+  margin-top: 17px;
+  padding-top: 12px;
+  color: var(--cm-accent);
+  font-size: 12px;
+}
+#cm-extension-mock .cm-stats {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 16px 0 19px;
+  font-size: 12px;
+  color: var(--cm-muted);
+}
+#cm-extension-mock .cm-stats strong {
+  color: var(--cm-text);
+  font-weight: 500;
+}
+#cm-extension-mock .cm-dot {
+  margin: 0 4px;
+  color: var(--cm-muted);
+}
+#cm-extension-mock .cm-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 5px;
+  font-size: 11px;
+  letter-spacing: 0.7px;
+  color: var(--cm-muted);
+  text-transform: uppercase;
+  font-weight: 500;
+}
+#cm-extension-mock .cm-link {
+  border: 0;
+  padding: 3px 0;
+  background: transparent;
+  color: var(--cm-accent);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+#cm-extension-mock .cm-event {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  padding: 12px 0;
+}
+#cm-extension-mock .cm-event + .cm-event {
+  border-top: 1px solid var(--cm-line);
+}
+#cm-extension-mock .cm-event-icon {
+  width: 30px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--cm-soft);
+  display: grid;
+  place-items: center;
+  color: var(--cm-muted);
+  flex-shrink: 0;
+}
+#cm-extension-mock .cm-event-text {
+  flex: 1;
+  min-width: 0;
+}
+#cm-extension-mock .cm-item-title {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+#cm-extension-mock .cm-time {
+  font-size: 11px;
+  white-space: nowrap;
+  align-self: flex-start;
+  margin-top: 3px;
+  color: var(--cm-muted);
+}
+#cm-extension-mock .cm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+#cm-extension-mock .cm-primary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  padding: 10px 12px;
+  background: var(--cm-text);
+  color: var(--cm-bg);
+  font-weight: 500;
+  border-radius: 8px;
+  min-height: 39px;
+}
+#cm-extension-mock .cm-primary:hover {
+  opacity: 0.9;
+}
+#cm-extension-mock .cm-secondary-button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--cm-line);
+  background: var(--cm-bg);
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: var(--cm-text);
+  min-height: 39px;
+}
+#cm-extension-mock .cm-secondary-button:hover {
+  background: var(--cm-soft);
+}
+#cm-extension-mock .cm-footer {
+  padding: 13px 20px;
+  border-top: 1px solid var(--cm-line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--cm-soft);
+  font-size: 12px;
+}
+#cm-extension-mock .cm-avatar {
+  width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--cm-line);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 500;
+  background: var(--cm-bg);
+}
+#cm-extension-mock .cm-footer-tail {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--cm-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+#cm-extension-mock .cm-dot-live {
+  width: 5px;
+  height: 5px;
+  background: var(--cm-accent);
+  border-radius: 50%;
+}
+#cm-extension-mock .cm-panel-title {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.3px;
+  margin-bottom: 3px;
+}
+#cm-extension-mock .cm-intro {
+  font-size: 12px;
+  color: var(--cm-muted);
+  margin-bottom: 20px;
+}
+#cm-extension-mock .cm-day {
+  font-size: 11px;
+  color: var(--cm-muted);
+  margin: 19px 0 4px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+#cm-extension-mock .cm-browser-row {
+  padding: 15px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--cm-line);
+}
+#cm-extension-mock .cm-browser-symbol {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--cm-soft);
+  font-size: 15px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+#cm-extension-mock .cm-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--cm-wash);
+  color: var(--cm-accent);
+  margin-left: 5px;
+  white-space: nowrap;
+}
+#cm-extension-mock .cm-browser-state {
+  font-size: 11px;
+  color: var(--cm-accent);
+  margin-left: auto;
+  text-align: right;
+}
+#cm-extension-mock .cm-note {
+  font-size: 12px;
+  color: var(--cm-muted);
+  padding-top: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+#cm-extension-mock .cm-note svg {
+  margin-top: 2px;
+}
+#cm-extension-mock .cm-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--cm-muted);
+  font-size: 12px;
+  padding: 0;
+  margin-bottom: 15px;
+  min-height: 24px;
+}
+#cm-extension-mock .cm-setting {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--cm-line);
+}
+#cm-extension-mock .cm-setting-copy {
+  flex: 1;
+}
+#cm-extension-mock .cm-setting-copy .cm-secondary {
+  margin-top: 3px;
+}
+#cm-extension-mock .cm-switch {
+  appearance: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 20px;
+  background: light-dark(#cbd3cd, #57625b);
+  border: 0;
+  flex-shrink: 0;
+  position: relative;
+  cursor: pointer;
+  margin: 0;
+}
+#cm-extension-mock .cm-switch:after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 14px;
+  height: 14px;
+  background: light-dark(#ffffff, #edf2ee);
+  border-radius: 50%;
+  transition: transform 0.15s;
+}
+#cm-extension-mock .cm-switch:checked {
+  background: var(--cm-accent);
+}
+#cm-extension-mock .cm-switch:checked:after {
+  transform: translateX(14px);
+}
+#cm-extension-mock .cm-privacy-note {
+  margin-top: 16px;
+  padding: 13px;
+  background: var(--cm-soft);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--cm-muted);
+}
+#cm-extension-mock .cm-permission {
+  background: var(--cm-soft);
+  padding: 16px;
+  border-radius: 9px;
+  margin-top: 16px;
+}
+#cm-extension-mock .cm-permission p {
+  font-size: 12px;
+  color: var(--cm-muted);
+  margin-top: 5px;
+}
+#cm-extension-mock .cm-permission .cm-actions {
+  margin-top: 13px;
+}
+#cm-extension-mock .cm-inline-confirm {
+  color: var(--cm-accent);
+  font-size: 12px;
+  padding-top: 12px;
+}
+#cm-extension-mock[data-density='compact'] .cm-content {
+  padding: 16px 20px;
+}
+#cm-extension-mock[data-density='compact'] .cm-event {
+  padding: 9px 0;
+}
+#cm-extension-mock[data-density='compact'] .cm-status {
+  padding: 17px;
+}
+@media (max-width: 370px) {
+  #cm-extension-mock .cm-header,
+  #cm-extension-mock .cm-content,
+  #cm-extension-mock .cm-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  #cm-extension-mock .cm-tabs {
+    padding: 0 16px;
+    gap: 20px;
+  }
+  #cm-extension-mock .cm-tag {
+    display: block;
+    width: max-content;
+    margin: 3px 0 0;
+  }
+}
+@media (pointer: coarse) {
+  #cm-extension-mock .cm-icon-button {
+    width: 44px;
+    height: 44px;
+  }
+  #cm-extension-mock .cm-tab,
+  #cm-extension-mock .cm-primary,
+  #cm-extension-mock .cm-secondary-button,
+  #cm-extension-mock .cm-back {
+    min-height: 44px;
+  }
+  #cm-extension-mock .cm-setting {
+    min-height: 60px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #cm-extension-mock * {
+    transition: none !important;
+  }
+}
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #202b26;
+  background: #f3f5f3;
+  color-scheme: light dark;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+textarea {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+* {
+  box-sizing: border-box;
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #247653;
+  outline-offset: 3px;
+}
+button:disabled {
+  cursor: wait;
+}
+h1,
+h3,
+p {
+  margin: 0;
+}
+.cm-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  margin: 14px 0 6px;
+  color: #69756e;
+}
+.cm-input {
+  display: block;
+  width: 100%;
+  border: 1px solid light-dark(#dfe6df, #3b433d);
+  background: light-dark(#fff, #202322);
+  color: light-dark(#202b26, #edf2ee);
+  border-radius: 7px;
+  padding: 10px 11px;
+  font-size: 12px;
+  min-height: 38px;
+}
+.cm-code-input {
+  resize: vertical;
+  min-height: 76px;
+  font-family: ui-monospace, monospace;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.cm-secondary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid #dfe6df;
+  border-radius: 7px;
+  padding: 10px 12px;
+}
+#cm-extension-mock .cm-content > h2:not(.cm-panel-title) {
+  font-size: 28px;
+  line-height: 1.15;
+}
+#cm-extension-mock .cm-source {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 12px;
+  background: var(--cm-soft);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--cm-muted);
+  margin-top: 12px;
+}
+#cm-extension-mock .cm-source strong {
+  font-weight: 500;
+  color: var(--cm-text);
+}
+#cm-extension-mock .cm-fineprint {
+  font-size: 10px;
+  line-height: 1.65;
+  color: var(--cm-muted);
+  margin-top: 20px;
+}
+#cm-extension-mock .cm-fineprint svg {
+  vertical-align: middle;
+  width: 13px;
+  margin-right: 4px;
+}
+#cm-extension-mock .cm-empty {
+  text-align: center;
+  padding: 25px 10px 19px;
+  color: var(--cm-muted);
+}
+#cm-extension-mock .cm-empty > svg {
+  width: 25px;
+  height: 25px;
+  stroke-width: 1.2;
+  color: var(--cm-accent);
+  margin-bottom: 9px;
+}
+#cm-extension-mock .cm-empty p {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--cm-text);
+  margin-bottom: 4px;
+}
+#cm-extension-mock .cm-empty span {
+  font-size: 12px;
+  line-height: 1.7;
+}
+#cm-extension-mock .cm-error {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: light-dark(#fff2ed, #422d28);
+  color: var(--cm-error);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 12px 20px;
+  overflow-wrap: anywhere;
+}
+#cm-extension-mock .cm-error > svg {
+  margin-top: 3px;
+}
+#cm-extension-mock .cm-error span {
+  flex: 1;
+  min-width: 0;
+}
+#cm-extension-mock .cm-status-warm {
+  --cm-accent: var(--cm-amber);
+  --cm-wash: light-dark(#fbf6eb, #383229);
+}
+#cm-extension-mock .cm-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 50px 20px;
+  color: var(--cm-muted);
+}
+#cm-extension-mock .cm-conflict {
+  font-size: 10px;
+  color: var(--cm-amber);
+  margin-top: 5px;
+}
+#cm-extension-mock .cm-restore {
+  font-size: 10px;
+  margin-top: 5px;
+}
+#cm-extension-mock .cm-restore svg {
+  width: 11px;
+  height: 11px;
+}
+#cm-extension-mock .cm-remove {
+  display: block;
+  font-size: 10px;
+  margin-top: 4px;
+  color: var(--cm-muted);
+}
+#cm-extension-mock .cm-setting-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  width: 100%;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--cm-line);
+  background: transparent;
+}
+#cm-extension-mock .cm-setting-button > span {
+  flex: 1;
+}
+#cm-extension-mock .cm-setting-button strong {
+  font-weight: 500;
+  font-size: 12px;
+  display: block;
+}
+#cm-extension-mock .cm-setting-button small {
+  display: block;
+  color: var(--cm-muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+#cm-extension-mock .cm-privacy-note svg {
+  vertical-align: middle;
+  margin-right: 5px;
+}
+#cm-extension-mock .cm-avatar svg {
+  width: 13px;
+  height: 13px;
+}
+#cm-extension-mock .cm-dot-live.muted {
+  background: var(--cm-muted);
+}
+#cm-extension-mock .cm-window {
+  position: relative;
+}
+#cm-extension-mock .cm-confirm {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: light-dark(#fffaf5c9, #16221bc9);
+  backdrop-filter: blur(4px);
+  z-index: 5;
+}
+#cm-extension-mock .cm-confirm .cm-permission {
+  border: 1px solid var(--cm-line);
+  box-shadow: 0 8px 32px #0001;
+  margin: 0;
+  background: var(--cm-bg);
+}
+#cm-extension-mock .cm-status-label {
+  font-size: 10px;
+}
+.spin {
+  animation: rotate 1.4s linear infinite;
+}
+@keyframes rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}
+
+html,
+body {
+  width: 392px;
+  min-width: 340px;
+  background: light-dark(#fff, #202322);
+}
+#cm-extension-mock {
+  padding: 0;
+}
+#cm-extension-mock .cm-window {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  max-height: 590px;
+  overflow-y: auto;
+}
+#cm-extension-mock .cm-source-note {
+  margin-top: 12px;
+}
+#cm-extension-mock .cm-account {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

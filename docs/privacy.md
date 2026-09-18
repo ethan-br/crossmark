@@ -1,0 +1,15 @@
+# Authentication and privacy
+
+Crossmark uses Google login through the Convex Better Auth component. Google's web OAuth flow runs through `browser.identity.launchWebAuthFlow`; the backend completes the provider callback. Only identity scopes are requested. Better Auth manages its user, account and session records in Convex, including provider credentials needed for authentication. Google browser cookies, Chrome Sync credentials and Google bookmark data are not read by the extension.
+
+The background stores a Better Auth bearer session in a separate `storage.local.googleSession` record. It obtains short-lived Convex JWTs in memory. Session credentials are never included in popup state or bookmark exports. Every collection read, mutation, backup and revocation requires both a valid Better Auth session and an active installation owned by that user. Device IDs and installation IDs are identifiers, not credentials. Users cannot access another account's collection by supplying its IDs.
+
+The extension sends bookmark titles, exact URLs, hierarchy, ordering, browser name, browser family, revisions and contact times to Convex. It does not fetch bookmark URLs, read visited pages or collect browsing history. Remote transport requires HTTPS; loopback HTTP is allowed for local development. The backend can read and process bookmark data. End-to-end encryption is not implemented.
+
+Supported Chromium storage restrictions limit extension storage to trusted contexts. Runtime messages require the extension's own ID and an extension-page URL. No content scripts are installed. Successful sign-out revokes the installation and ends its session, then removes local sync state and the session credential. An already expired or remotely revoked session can be cleared locally. Pending local changes must be synced before sign-out; export remains available without authentication. Revocation and sign-out leave native bookmarks intact.
+
+Signing in with the same Google account recovers access to its existing collection. A newly installed browser must review merging existing local bookmarks and may introduce duplicates if it no longer has its original native mappings. Losing the Google account follows Google's recovery process.
+
+Legacy v0 credentials and enrollment records were retired in the local backend. Ownerless development collections remain archived and cannot be accessed through Google accounts. The extension strips a legacy credential and keeps its old sync data in `crossmarkLegacy` for local recovery; native bookmarks become the source when a new Google-owned collection is initialized. A pre-migration database export is saved locally under `.convex/` and is not distributed.
+
+History, backups and tombstones currently remain on the backend without automatic expiry. Account deletion and retention controls are needed before public release. Local database files under `.convex/` and local environment files are ignored by Git. Cloud storage encryption is provided by the selected Convex deployment, not a separate client encryption layer.

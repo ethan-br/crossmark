@@ -1,0 +1,6 @@
+convex/_generated/
+dist/
+node_modules/
+output/
+IMPLEMENTATION_PLAN.md
+CONTRIBUTING.md

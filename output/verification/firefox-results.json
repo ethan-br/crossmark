@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-09-18T18:49:09.489Z",
+  "firefoxVersion": "156.0",
+  "auth": {
+    "origin": "moz-extension://2cefeb1e-7b6d-4c99-9b29-6b94b3560e4a",
+    "redirect": "https://e75a80704b2a90a50aa2f2ce7d240a397e57b612.extensions.allizom.org/auth"
+  },
+  "checks": [
+    "Built extension startup",
+    "Native menu and separator read",
+    "Google-only sign-in UI",
+    "Missing OAuth configuration reported",
+    "No bookmark changes without login",
+    "Credential-free export",
+    "Popup reload"
+  ],
+  "liveGoogleLogin": "Not tested: Google OAuth client not configured"
+}
