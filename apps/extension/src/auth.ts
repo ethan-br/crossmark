@@ -38,6 +38,14 @@ export class GoogleSession implements SessionAuth {
       signal: AbortSignal.timeout(30000),
     });
     const data = await response.json();
+    if (
+      !response.ok &&
+      ['INVALID_ORIGIN', 'INVALID_CALLBACK_URL', 'INVALID_ERROR_CALLBACK_URL'].includes(data.code)
+    ) {
+      throw new Error(
+        `Google login configuration is incomplete on ${this.siteURL}. Add ${browser.runtime.getURL('').replace(/\/$/, '')} and ${new URL(browser.identity.getRedirectURL('auth')).origin} to AUTH_TRUSTED_ORIGINS. See docs/google-oauth-setup.md.`,
+      );
+    }
     if (!response.ok)
       throw new Error(
         response.status === 401
@@ -57,6 +65,11 @@ export class GoogleSession implements SessionAuth {
         'Google login is not configured on the backend. See the Google OAuth setup in README.md.',
       );
     const redirect = browser.identity.getRedirectURL('auth');
+    const firefox = browser.runtime.getURL('').startsWith('moz-extension:');
+    if (firefox && !config.firefoxLaunchSupported)
+      throw new Error(
+        'Firefox Google login requires an updated backend. Deploy the current Convex functions to the configured backend. See docs/google-oauth-setup.md.',
+      );
     const state = crypto.randomUUID();
     const callback = new URL(redirect);
     callback.searchParams.set('state', state);
@@ -68,8 +81,12 @@ export class GoogleSession implements SessionAuth {
     });
     if (!start.url || new URL(start.url).origin !== 'https://accounts.google.com')
       throw new Error('Invalid Google authorization URL.');
+    // Firefox validates the initial URL's redirect_uri against getRedirectURL().
+    // Google must return to Convex first, so use our constrained backend redirect.
+    const launch = new URL(`${this.siteURL}/extension/google-launch`);
+    launch.searchParams.set('authorization', start.url);
     const completed = await browser.identity.launchWebAuthFlow({
-      url: start.url,
+      url: firefox ? launch.href : start.url,
       interactive: true,
     });
     if (!completed) throw new Error('Google login was cancelled.');

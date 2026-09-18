@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { authenticatedBackend } from './fixtures/auth';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 const origin = 'chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok';
 const callback =
   'https://eblopgfhjccjncfjmgcjfahaggkcolok.chromiumapp.org/auth?state=extension-nonce';
@@ -39,6 +41,54 @@ it('starts Google OAuth through the real Better Auth HTTP route', async () => {
   );
   expect(url.searchParams.get('state')).toBeTruthy();
   expect(url.searchParams.get('scope')?.split(' ').sort()).toEqual(['email', 'openid', 'profile']);
+});
+it('accepts the Firefox build callback and relays the unchanged Google URL', async () => {
+  // Bind the regression to the actual build ID, not a mock browser identity.
+  const build = readFileSync(new URL('../scripts/build.mjs', import.meta.url), 'utf8');
+  const addonId = build.match(/id: '(crossmark[^']+)'/)![1];
+  const hash = createHash('sha1').update(addonId).digest('hex');
+  const redirect = `https://${hash}.extensions.allizom.org/auth`;
+  expect(redirect).toBe(
+    'https://e75a80704b2a90a50aa2f2ce7d240a397e57b612.extensions.allizom.org/auth',
+  );
+  const firefoxOrigin = 'moz-extension://test-profile';
+  vi.stubEnv('AUTH_TRUSTED_ORIGINS', `${firefoxOrigin},${new URL(redirect).origin}`);
+  const response = await request(
+    '/sign-in/social',
+    {
+      provider: 'google',
+      callbackURL: `${redirect}?state=firefox-nonce`,
+      errorCallbackURL: `${redirect}?state=firefox-nonce`,
+      disableRedirect: true,
+    },
+    firefoxOrigin,
+  );
+  expect(response.status).toBe(200);
+  const { url } = await response.json();
+  expect(new URL(url).searchParams.get('redirect_uri')).toBe(
+    'http://127.0.0.1:3211/api/auth/callback/google',
+  );
+  const { unauthenticated: t } = await authenticatedBackend();
+  const relay = await t.fetch(`/extension/google-launch?authorization=${encodeURIComponent(url)}`);
+  expect(relay.status).toBe(302);
+  expect(relay.headers.get('location')).toBe(url);
+  expect(relay.headers.get('cache-control')).toBe('no-store');
+  expect(relay.headers.get('referrer-policy')).toBe('no-referrer');
+});
+it.each([
+  '',
+  'not-a-url',
+  'https://attacker.example/',
+  'https://accounts.google.com.evil.example/o/oauth2/v2/auth',
+  'https://accounts.google.com/logout',
+  'https://accounts.google.com/o/oauth2/v2/auth?client_id=other&redirect_uri=https://evil.example&response_type=code&state=x',
+])('rejects invalid Firefox relay destinations: %s', async (url) => {
+  const { unauthenticated: t } = await authenticatedBackend();
+  const response = await t.fetch(
+    `/extension/google-launch?authorization=${encodeURIComponent(url)}`,
+  );
+  expect(response.status).toBe(400);
+  expect(response.headers.has('location')).toBe(false);
 });
 it('rejects untrusted cookie-bearing origins and callback destinations', async () => {
   expect(

@@ -43,6 +43,7 @@ export const configuration = query({
   args: {},
   handler: () => ({
     googleConfigured: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    firefoxLaunchSupported: true,
   }),
 });
 export const currentUser = query({

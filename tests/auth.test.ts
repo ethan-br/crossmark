@@ -4,9 +4,12 @@ const mocks = vi.hoisted(() => ({
   launch: vi.fn(),
   query: vi.fn(),
   setAuth: vi.fn(),
+  runtimeURL: vi.fn(),
+  redirectURL: vi.fn(),
 }));
 vi.mock('webextension-polyfill', () => ({
   default: {
+    runtime: { getURL: mocks.runtimeURL },
     storage: {
       local: {
         get: async (key: string) => ({ [key]: mocks.storage[key] }),
@@ -17,7 +20,7 @@ vi.mock('webextension-polyfill', () => ({
       },
     },
     identity: {
-      getRedirectURL: () => 'https://test.chromiumapp.org/auth',
+      getRedirectURL: mocks.redirectURL,
       launchWebAuthFlow: mocks.launch,
     },
   },
@@ -34,9 +37,11 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.storage = {};
+  mocks.runtimeURL.mockReturnValue('chrome-extension://test/');
+  mocks.redirectURL.mockReturnValue('https://test.chromiumapp.org/auth');
   callback = '';
   mocks.query
-    .mockResolvedValueOnce({ googleConfigured: true })
+    .mockResolvedValueOnce({ googleConfigured: true, firefoxLaunchSupported: true })
     .mockResolvedValue({ id: 'user-1', email: 'one@example.com', name: 'One' });
   fetchMock = vi.fn(async (url: string, init: RequestInit) => {
     if (url.endsWith('/sign-in/social')) {
@@ -64,6 +69,10 @@ it('exchanges the Google callback for a private session and a Convex JWT', async
   const auth = session();
   expect(await auth.signIn()).toEqual({ id: 'user-1', email: 'one@example.com', name: 'One' });
   expect(mocks.setAuth).toHaveBeenCalledWith('convex-jwt');
+  expect(mocks.launch).toHaveBeenCalledWith({
+    url: 'https://accounts.google.com/o/oauth2/v2/auth?state=server-nonce',
+    interactive: true,
+  });
   expect(mocks.storage.googleSession).toMatchObject({ token: 'signed-session-secret' });
   const jwtCall = fetchMock.mock.calls.find(([url]) => url.endsWith('/convex/token'))!;
   expect(jwtCall[1].headers).toMatchObject({ Authorization: 'Bearer signed-session-secret' });
@@ -72,6 +81,42 @@ it('exchanges the Google callback for a private session and a Convex JWT', async
   expect(mocks.storage.googleSession).toBeUndefined();
   await expect(auth.token()).rejects.toThrow('Sign in with Google');
 });
+it('launches Firefox through Convex and validates its runtime-generated callback', async () => {
+  mocks.runtimeURL.mockReturnValue('moz-extension://profile-uuid/');
+  mocks.redirectURL.mockReturnValue('https://installed-addon.extensions.allizom.org/auth');
+  await session().signIn();
+  const launch = new URL(mocks.launch.mock.calls[0][0].url);
+  expect(launch.origin).toBe('https://backend.convex.site');
+  expect(launch.pathname).toBe('/extension/google-launch');
+  expect(launch.searchParams.has('redirect_uri')).toBe(false);
+  expect(launch.searchParams.get('authorization')).toBe(
+    'https://accounts.google.com/o/oauth2/v2/auth?state=server-nonce',
+  );
+  expect(new URL(callback).origin).toBe('https://installed-addon.extensions.allizom.org');
+  expect(new URL(callback).pathname).toBe('/auth');
+  expect(mocks.redirectURL).toHaveBeenCalledWith('auth');
+});
+it('reports an actionable error for Firefox against an older backend', async () => {
+  mocks.runtimeURL.mockReturnValue('moz-extension://profile-uuid/');
+  mocks.query.mockReset().mockResolvedValue({ googleConfigured: true });
+  await expect(session().signIn()).rejects.toThrow('Deploy the current Convex functions');
+  expect(mocks.launch).not.toHaveBeenCalled();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+it.each(['INVALID_ORIGIN', 'INVALID_CALLBACK_URL', 'INVALID_ERROR_CALLBACK_URL'])(
+  'explains missing trusted origins: %s',
+  async (code) => {
+    mocks.runtimeURL.mockReturnValue('moz-extension://profile-uuid/');
+    mocks.redirectURL.mockReturnValue('https://installed-addon.extensions.allizom.org/auth');
+    fetchMock.mockResolvedValue(
+      Response.json({ code, message: 'Invalid callbackURL' }, { status: 403 }),
+    );
+    await expect(session().signIn()).rejects.toThrow(
+      'Add moz-extension://profile-uuid and https://installed-addon.extensions.allizom.org to AUTH_TRUSTED_ORIGINS',
+    );
+    expect(mocks.launch).not.toHaveBeenCalled();
+  },
+);
 it.each([
   'https://attacker.example/auth?state=wrong&ott=x',
   'https://test.chromiumapp.org/auth?state=wrong&ott=x',
