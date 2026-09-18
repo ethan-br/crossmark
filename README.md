@@ -75,6 +75,10 @@ Headless tests load the actual extension builds in disposable profiles. They ver
 
 `npm test` also checks the sync engine, adapters, OAuth callback validation and account authorization in isolation. These fixtures are test-only and are not included in either extension. On macOS Firefox defaults to `/Applications/Firefox.app/Contents/MacOS/firefox`; override with `FIREFOX_BINARY` if needed. Selenium obtains geckodriver on its first run. Results and screenshots are in `output/verification/`.
 
+## Debugging
+
+An opt-in background-console mode provides structured diagnostics, JSON export and local clearing without a rebuild. See [extension debug mode](docs/debugging.md) for the toggle, supported consoles and privacy details.
+
 ## Project map
 
 | Path                                   | Responsibility                                                 |

@@ -1,3 +1,4 @@
+import { debug } from './debug';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -46,6 +47,10 @@ export class Engine {
     return next;
   }
   command(command: Command): Promise<unknown> {
+    if (command.type === 'state') return this.commandImpl(command);
+    return debug.trace(`command.${command.type}`, () => this.commandImpl(command));
+  }
+  private commandImpl(command: Command): Promise<unknown> {
     // Read-only status must remain live while a serialized exchange is running.
     if (command.type === 'state')
       return this.store.read().then((state) => {
@@ -220,6 +225,7 @@ export class Engine {
   private async capture(state: State) {
     const local = await this.adapter.read(state);
     const ops = diff(state.baseline, local, state.sequence);
+    debug.event('sync.capture', 'success', { count: ops.length });
     if (ops.length) {
       if (ops.length > 50 || ops.filter((o) => o.kind === 'delete').length > 20) {
         state.backup = state.baseline;
@@ -235,12 +241,18 @@ export class Engine {
   }
   private async exchange() {
     let state = await this.store.read();
-    if (!state.connected || !state.deviceId) return;
+    if (!state.connected || !state.deviceId) {
+      debug.event('sync.exchange', 'disconnected');
+      return;
+    }
+    const started = performance.now();
+    debug.event('sync.exchange', 'start');
     try {
       await this.adapter.recover(state, this.store);
       if (state.joining) {
         if (state.baseline.length && !state.safetyApproved) {
           state.status = 'review';
+          debug.event('sync.exchange', 'review');
           await this.save(state);
           return;
         }
@@ -256,16 +268,21 @@ export class Engine {
       }
       await this.capture(state);
       if (state.paused) {
+        debug.event('sync.exchange', 'paused');
         state.status = 'paused';
         await this.save(state);
         return;
       }
       if (state.reviewCount && !state.safetyApproved) {
+        debug.event('sync.exchange', 'review');
         state.status = 'review';
         await this.save(state);
         return;
       }
-      if (state.nextRetryAt && Date.now() < state.nextRetryAt) return;
+      if (state.nextRetryAt && Date.now() < state.nextRetryAt) {
+        debug.event('sync.retry', 'backoff', { delayMs: state.nextRetryAt - Date.now() });
+        return;
+      }
       await this.authorize();
       state.status = 'syncing';
       delete state.error;
@@ -289,6 +306,7 @@ export class Engine {
         await this.save(state);
         await this.adapter.ensureRoots(state, this.store, remote.nodes);
         const settled = await this.project(state, remote.nodes);
+        debug.event('sync.project', settled ? 'success' : 'local-change', { attempt: passes + 1 });
         if (!settled) {
           await this.capture(state);
           if ((state as State).status === 'review' && !state.safetyApproved) return;
@@ -299,6 +317,7 @@ export class Engine {
           deviceId: state.deviceId as Id<'devices'>,
           cursor: state.cursor,
         });
+        debug.event('sync.exchange', 'success', { elapsedMs: performance.now() - started });
         state.lastSync = Date.now();
         delete state.nextRetryAt;
         state.status = 'ready';
@@ -319,6 +338,11 @@ export class Engine {
       state.nextRetryAt =
         Date.now() +
         Math.min(300_000, 1000 * 2 ** Math.min(state.failures, 8)) * (0.8 + Math.random() * 0.4);
+      debug.event('sync.exchange', 'failure', { elapsedMs: performance.now() - started });
+      debug.event('sync.retry', 'scheduled', {
+        attempt: state.failures,
+        delayMs: Math.max(0, state.nextRetryAt - Date.now()),
+      });
       state.status =
         error instanceof TypeError || /fetch|network|connection|offline/i.test(String(error))
           ? 'offline'

@@ -1,8 +1,12 @@
+import { debug } from './debug';
+import { configureDebug } from './debug-control';
 import browser, { type Runtime } from 'webextension-polyfill';
 import { GoogleSession } from './auth';
 import { Adapter } from './adapter';
 import { Engine, type Command } from './engine';
 import { initialState, publicState, type State, type Store } from './state';
+const diagnostics = configureDebug(debug, browser.storage);
+Object.assign(globalThis, { crossmarkDebug: diagnostics.controls });
 const store: Store = {
   read: async () => {
     const saved = (await browser.storage.local.get('crossmark')).crossmark as State | undefined;
@@ -32,6 +36,8 @@ const engine = new Engine(
     import.meta.env.VITE_CONVEX_SITE_URL || 'http://127.0.0.1:3211',
   ),
 );
+// Queue startup behind the persisted opt-in; listeners still register synchronously.
+void engine.run(() => diagnostics.ready);
 async function badge(s: State) {
   const text =
     s.status === 'error'

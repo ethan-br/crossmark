@@ -1,3 +1,4 @@
+import { debug } from './debug';
 import type { Bookmarks } from 'webextension-polyfill';
 import { type Node, isRoot } from '../../../packages/model';
 import type { State, Store, Journal } from './state';
@@ -27,7 +28,10 @@ export class Adapter {
     readonly api: BookmarkAPI,
     readonly firefox: boolean,
   ) {}
-  async read(state: State): Promise<Node[]> {
+  read(state: State): Promise<Node[]> {
+    return debug.trace('bookmarks.read', () => this.readImpl(state));
+  }
+  private async readImpl(state: State): Promise<Node[]> {
     const tree = await this.api.getTree();
     const roots = tree[0]?.children ?? [];
     const discovered: Record<string, string> = {};
@@ -144,7 +148,10 @@ export class Adapter {
   projected(n: Node) {
     return this.firefox || n.kind !== 'separator';
   }
-  async recover(state: State, store: Store) {
+  recover(state: State, store: Store) {
+    return debug.trace('bookmarks.recover', () => this.recoverImpl(state, store));
+  }
+  private async recoverImpl(state: State, store: Store) {
     const j = state.journal;
     if (!j) return;
     if (j.kind === 'create') {
@@ -198,7 +205,10 @@ export class Adapter {
     if (j.kind === 'delete') delete state.mappings[j.target.id];
     delete state.journal;
   }
-  async write(state: State, store: Store, j: Journal) {
+  write(state: State, store: Store, j: Journal) {
+    return debug.trace('bookmarks.write', () => this.writeImpl(state, store, j));
+  }
+  private async writeImpl(state: State, store: Store, j: Journal) {
     if (j.kind === 'create')
       j.childrenBefore = (
         await this.api.getChildren(

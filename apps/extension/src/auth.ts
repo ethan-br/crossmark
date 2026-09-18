@@ -1,3 +1,4 @@
+import { debug } from './debug';
 import browser from 'webextension-polyfill';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../../convex/_generated/api';
@@ -45,7 +46,10 @@ export class GoogleSession implements SessionAuth {
       );
     return { data, response };
   }
-  async signIn(): Promise<Account> {
+  signIn(): Promise<Account> {
+    return debug.trace('auth.signIn', () => this.signInImpl());
+  }
+  private async signInImpl(): Promise<Account> {
     const client = new ConvexHttpClient(this.convexURL);
     const config = await client.query(api.auth.configuration, {});
     if (!config.googleConfigured)
@@ -93,7 +97,10 @@ export class GoogleSession implements SessionAuth {
     await browser.storage.local.set({ googleSession: { token, account } });
     return account;
   }
-  async token() {
+  token() {
+    return debug.trace('auth.token', () => this.tokenImpl());
+  }
+  private async tokenImpl() {
     if (this.jwt && this.jwt.expiresAt > Date.now() + 60000) return this.jwt.value;
     const session = await this.stored();
     if (!session?.token) throw new Error('Sign in with Google to continue.');
@@ -105,7 +112,10 @@ export class GoogleSession implements SessionAuth {
     this.jwt = { value: data.token, expiresAt: Date.now() + 10 * 60_000 };
     return data.token as string;
   }
-  async signOut() {
+  signOut() {
+    return debug.trace('auth.signOut', () => this.signOutImpl());
+  }
+  private async signOutImpl() {
     const session = await this.stored();
     if (session?.token) {
       try {
