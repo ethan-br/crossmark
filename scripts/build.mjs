@@ -6,6 +6,9 @@ import { readFile } from 'node:fs/promises';
 const chromiumKey = JSON.parse(
   await readFile(new URL('./chromium-key.json', import.meta.url), 'utf8'),
 ).key;
+const packageJson = JSON.parse(
+  await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+);
 const env = loadEnv('production', process.cwd(), '');
 const url = env.VITE_CONVEX_URL || 'http://127.0.0.1:3210';
 const origin = new URL(url).origin;
@@ -47,7 +50,7 @@ for (const browser of ['chromium', 'firefox']) {
   const manifest = {
     manifest_version: 3,
     name: 'Crossmark',
-    version: '0.0.1',
+    version: packageJson.version,
     description: 'Synchronize native bookmarks across desktop browsers.',
     permissions: ['bookmarks', 'storage', 'alarms', 'identity'],
     host_permissions: [...new Set([`${origin}/*`, `${siteOrigin}/*`])],

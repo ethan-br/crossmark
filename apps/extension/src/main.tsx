@@ -30,6 +30,7 @@ import {
 import { type Activity, count, alive } from '../../../packages/model';
 import { type State, initialState } from './state';
 import type { Command } from './engine';
+import packageJson from '../../../package.json';
 import './styles.css';
 async function command<T = State>(message: Command): Promise<T> {
   const result = (await browser.runtime.sendMessage(message)) as
@@ -558,7 +559,7 @@ function App() {
                     <ChevronRight />
                   </button>
                   <p className="cm-fineprint">
-                    v0.0.1 · Native changes trigger sync. Remote changes are checked every 30
+                    v{packageJson.version} · Native changes trigger sync. Remote changes are checked every 30
                     seconds while the browser is running. Bookmark data is not end-to-end encrypted.
                   </p>
                 </section>
