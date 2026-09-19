@@ -1,6 +1,6 @@
 # Google OAuth setup
 
-Google is the only login provider. No Google OAuth client exists for this project yet, so live sign-in has not been tested. No email/password, email code or manual device enrollment flow is enabled.
+Google is the only login provider. Live sign-in requires a Google web client configured on the selected backend. No email/password, email code or manual device enrollment flow is enabled.
 
 ## 1. Choose the backend
 
@@ -32,6 +32,8 @@ In [Google Cloud Console](https://console.cloud.google.com/), select or create a
 
 The extension's `chromiumapp.org` / `extensions.allizom.org` URLs belong in Better Auth's trusted origins below, **not** in Google's redirect URI field. Google returns to Convex; Convex then returns to the extension.
 
+Firefox and Firefox-based browsers start the identity flow at the backend's `/extension/google-launch` route. That route redirects to the Google authorization URL without changing its `redirect_uri`. This is necessary because Firefox rejects an initial authorization URL whose `redirect_uri` points to Convex instead of the extension. Chromium continues to launch Google's URL directly. Deploy the updated Convex functions along with the extension; an older backend produces an explicit update-required error.
+
 Reference: [Better Auth Google provider setup](https://www.better-auth.com/docs/authentication/google).
 
 ## 3. Configure Convex secrets
@@ -49,10 +51,10 @@ A random `BETTER_AUTH_SECRET` is already set on this workspace's local deploymen
 
 ## 4. Configure trusted origins
 
-With the checked-in Chromium public manifest key, the unpacked extension ID is `eblopgfhjccjncfjmgcjfahaggkcolok`. Firefox's stable add-on ID is `crossmark@crossmark.local`. Start `AUTH_TRUSTED_ORIGINS` with this comma-separated value:
+With the checked-in Chromium public manifest key, the unpacked extension ID is `eblopgfhjccjncfjmgcjfahaggkcolok`. Firefox's stable add-on ID is `braunstein.ethan@gmail.com`. Start `AUTH_TRUSTED_ORIGINS` with this comma-separated value:
 
 ```text
-chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok,https://eblopgfhjccjncfjmgcjfahaggkcolok.chromiumapp.org,https://e75a80704b2a90a50aa2f2ce7d240a397e57b612.extensions.allizom.org
+chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok,https://eblopgfhjccjncfjmgcjfahaggkcolok.chromiumapp.org,https://535884d15b4bf578f81c89ff04b5e3b95b647c0a.extensions.allizom.org
 ```
 
 Firefox's `moz-extension://` origin is unique to each browser profile. After loading the extension, open **about:debugging → Crossmark → Inspect**. In its console, run:
@@ -62,7 +64,9 @@ browser.runtime.getURL('').replace(/\/$/, '');
 browser.identity.getRedirectURL('auth');
 ```
 
-Append the returned `moz-extension://<uuid>` origin to `AUTH_TRUSTED_ORIGINS`. Keep every Firefox profile you intend to use in the comma-separated list. Reinstalling can change that origin. The redirect should be the stable `https://e75a80704b2a90a50aa2f2ce7d240a397e57b612.extensions.allizom.org/auth`; if the add-on ID changes, use the actual returned origin instead.
+Append the returned `moz-extension://<uuid>` origin to `AUTH_TRUSTED_ORIGINS`. Keep every Firefox profile you intend to use in the comma-separated list. Reinstalling can change that origin. The redirect should be the stable `https://535884d15b4bf578f81c89ff04b5e3b95b647c0a.extensions.allizom.org/auth`; if the add-on ID changes, use the actual returned origin instead.
+
+The temporary development build and AMO-signed build use the same explicit `browser_specific_settings.gecko.id`, so their identity callback is the same. Signing does not replace the ID. If a distribution uses a different add-on ID, or a Firefox-based browser uses a different identity redirect domain, read `getRedirectURL('auth')` in that installed build and register its exact origin. Do not construct it from the profile UUID. Keep `/auth` in the generated callback; the per-attempt `state` query parameter is added at runtime and does not belong in configuration. The Google web client's registered callback remains the exact backend URL from section 2 in every case.
 
 For Chromium, inspect the service worker from the extensions manager and verify `chrome.runtime.id` and `chrome.identity.getRedirectURL('auth')`. Keep `scripts/chromium-key.json` stable across local builds. It contains only the public key, not a signing private key. Store distribution or a different key may change the ID and require updated trusted origins.
 
@@ -84,9 +88,13 @@ Sign in with the same account in the second browser and approve its merge if it 
 - **Google login is not configured:** set both Google variables on the deployment the built extension actually uses.
 - **redirect_uri_mismatch:** compare Google's registered URI against the backend HTTP origin plus `/api/auth/callback/google`, including scheme, host and port.
 - **Invalid origin / callback URL:** add the exact request origin and extension redirect origin to `AUTH_TRUSTED_ORIGINS`; Firefox's profile UUID can change.
+- **Firefox Google login requires an updated backend:** deploy this version's Convex functions to the deployment selected by `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL`, then reload the extension.
+- **redirect_uri not allowed:** reload the current Firefox extension build and deploy its backend launch route. Do not change Google's callback to `extensions.allizom.org`; Google must still return to Convex. This Firefox error occurs before Google login and is different from Google's `redirect_uri_mismatch`.
 - **Access blocked while Testing:** add the chosen account as a Google test user and check the configured audience.
 - **Network/CSP failure:** verify both `.env.local` backend URLs, rebuild and reload. Both origins must appear in the generated manifest's host permissions and connection policy.
 - **Sign-in required:** sign in with the same Google account again. Pending changes remain local. Export is available without a valid session; pausing also works without network access.
+
+For diagnostics, enable [debug mode](debugging.md) before reproducing. `auth.signIn` and `command.connect` record operation outcomes without OAuth URLs or tokens. Inspect the two public redirect/origin values above separately when checking configuration.
 
 Implementation references: [Convex Better Auth integration](https://labs.convex.dev/better-auth/framework-guides/react), [Better Auth bearer sessions](https://www.better-auth.com/docs/plugins/bearer).
 
