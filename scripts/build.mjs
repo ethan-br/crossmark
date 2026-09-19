@@ -64,7 +64,7 @@ for (const browser of ['chromium', 'firefox']) {
           background: { scripts: ['background.js'] },
           browser_specific_settings: {
             gecko: {
-              id: 'crossmark@crossmark.local',
+              id: 'braunstein.ethan@gmail.com',
               strict_min_version: '128.0',
               data_collection_permissions: { required: ['bookmarksInfo', 'authenticationInfo'] },
             },

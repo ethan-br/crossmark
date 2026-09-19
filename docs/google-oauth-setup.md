@@ -51,10 +51,10 @@ A random `BETTER_AUTH_SECRET` is already set on this workspace's local deploymen
 
 ## 4. Configure trusted origins
 
-With the checked-in Chromium public manifest key, the unpacked extension ID is `eblopgfhjccjncfjmgcjfahaggkcolok`. Firefox's stable add-on ID is `crossmark@crossmark.local`. Start `AUTH_TRUSTED_ORIGINS` with this comma-separated value:
+With the checked-in Chromium public manifest key, the unpacked extension ID is `eblopgfhjccjncfjmgcjfahaggkcolok`. Firefox's stable add-on ID is `braunstein.ethan@gmail.com`. Start `AUTH_TRUSTED_ORIGINS` with this comma-separated value:
 
 ```text
-chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok,https://eblopgfhjccjncfjmgcjfahaggkcolok.chromiumapp.org,https://e75a80704b2a90a50aa2f2ce7d240a397e57b612.extensions.allizom.org
+chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok,https://eblopgfhjccjncfjmgcjfahaggkcolok.chromiumapp.org,https://535884d15b4bf578f81c89ff04b5e3b95b647c0a.extensions.allizom.org
 ```
 
 Firefox's `moz-extension://` origin is unique to each browser profile. After loading the extension, open **about:debugging → Crossmark → Inspect**. In its console, run:
@@ -64,7 +64,7 @@ browser.runtime.getURL('').replace(/\/$/, '');
 browser.identity.getRedirectURL('auth');
 ```
 
-Append the returned `moz-extension://<uuid>` origin to `AUTH_TRUSTED_ORIGINS`. Keep every Firefox profile you intend to use in the comma-separated list. Reinstalling can change that origin. The redirect should be the stable `https://e75a80704b2a90a50aa2f2ce7d240a397e57b612.extensions.allizom.org/auth`; if the add-on ID changes, use the actual returned origin instead.
+Append the returned `moz-extension://<uuid>` origin to `AUTH_TRUSTED_ORIGINS`. Keep every Firefox profile you intend to use in the comma-separated list. Reinstalling can change that origin. The redirect should be the stable `https://535884d15b4bf578f81c89ff04b5e3b95b647c0a.extensions.allizom.org/auth`; if the add-on ID changes, use the actual returned origin instead.
 
 The temporary development build and AMO-signed build use the same explicit `browser_specific_settings.gecko.id`, so their identity callback is the same. Signing does not replace the ID. If a distribution uses a different add-on ID, or a Firefox-based browser uses a different identity redirect domain, read `getRedirectURL('auth')` in that installed build and register its exact origin. Do not construct it from the profile UUID. Keep `/auth` in the generated callback; the per-attempt `state` query parameter is added at runtime and does not belong in configuration. The Google web client's registered callback remains the exact backend URL from section 2 in every case.
 

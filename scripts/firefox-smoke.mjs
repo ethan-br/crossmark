@@ -9,7 +9,7 @@ const options = new firefox.Options()
   .addArguments('-headless')
   .setPreference(
     'extensions.webextensions.uuids',
-    JSON.stringify({ 'crossmark@crossmark.local': uuid }),
+    JSON.stringify({ 'braunstein.ethan@gmail.com': uuid }),
   );
 if (process.env.FIREFOX_BINARY) options.setBinary(process.env.FIREFOX_BINARY);
 else if (process.platform === 'darwin')

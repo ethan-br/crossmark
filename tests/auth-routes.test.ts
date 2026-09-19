@@ -45,11 +45,11 @@ it('starts Google OAuth through the real Better Auth HTTP route', async () => {
 it('accepts the Firefox build callback and relays the unchanged Google URL', async () => {
   // Bind the regression to the actual build ID, not a mock browser identity.
   const build = readFileSync(new URL('../scripts/build.mjs', import.meta.url), 'utf8');
-  const addonId = build.match(/id: '(crossmark[^']+)'/)![1];
+  const addonId = build.match(/gecko:\s*\{\s*id: '([^']+)'/)![1];
   const hash = createHash('sha1').update(addonId).digest('hex');
   const redirect = `https://${hash}.extensions.allizom.org/auth`;
   expect(redirect).toBe(
-    'https://e75a80704b2a90a50aa2f2ce7d240a397e57b612.extensions.allizom.org/auth',
+    'https://535884d15b4bf578f81c89ff04b5e3b95b647c0a.extensions.allizom.org/auth',
   );
   const firefoxOrigin = 'moz-extension://test-profile';
   vi.stubEnv('AUTH_TRUSTED_ORIGINS', `${firefoxOrigin},${new URL(redirect).origin}`);
