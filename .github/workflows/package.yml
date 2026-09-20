@@ -1,0 +1,108 @@
+name: Package
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: Submit the Firefox XPI to AMO unlisted signing
+        type: boolean
+        default: false
+
+concurrency:
+  group: package-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build unsigned packages
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.sign)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+      VITE_CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-packages
+          path: |
+            dist/chromium
+            dist/firefox
+            dist/crossmark-chromium.zip
+            dist/crossmark-firefox.xpi
+          retention-days: 14
+
+  sign:
+    name: Sign Firefox
+    if: >-
+      secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.sign) ||
+      (github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+      AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+      VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+      VITE_CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Skip unsigned-repeat signing on main
+        id: release
+        run: |
+          current="$(node -p "require('./package.json').version")"
+          echo "version=$current" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" != "push" ] || [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          previous="$(git show HEAD^:package.json | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>console.log(JSON.parse(s).version))")"
+          if [ "$current" = "$previous" ]; then
+            echo "package.json version $current is unchanged; skipping AMO signing."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Require production Convex URLs
+        if: steps.release.outputs.needed == 'true'
+        run: |
+          if [ -z "$VITE_CONVEX_URL" ] || [ -z "$VITE_CONVEX_SITE_URL" ]; then
+            echo 'Set GitHub variables VITE_CONVEX_URL and VITE_CONVEX_SITE_URL before signing a release.'
+            exit 1
+          fi
+      - if: steps.release.outputs.needed == 'true'
+        run: npm ci
+      - if: steps.release.outputs.needed == 'true'
+        run: npm run package
+      - if: steps.release.outputs.needed == 'true'
+        run: node scripts/sign-firefox.mjs
+      - uses: actions/upload-artifact@v4
+        if: steps.release.outputs.needed == 'true'
+        with:
+          name: extension-signed
+          path: |
+            dist/crossmark-chromium.zip
+            dist/signed/
+            dist/crossmark-firefox-signed.xpi
+          retention-days: 90

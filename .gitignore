@@ -10,4 +10,6 @@ web-ext-artifacts/
 .convex/
 test-results/
 playwright-report/
+output/
+convex-preview.env
 .DS_Store

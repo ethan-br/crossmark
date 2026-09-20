@@ -16,22 +16,26 @@ Crossmark uses [WXT](https://wxt.dev/guide/resources/migrate.html) for entrypoin
 
 Use Node.js 22 or newer. Run `npm install` (or `npm ci` for the lockfile); its `postinstall` runs `wxt prepare`.
 
-| Command                   | Result                                                                    |
-| ------------------------- | ------------------------------------------------------------------------- |
-| `npm run backend`         | Start/configure the Convex development backend                            |
-| `npm run dev`             | WXT Chromium development build and browser reloads                        |
-| `npm run dev:firefox`     | WXT Firefox development build and browser reloads                         |
-| `npm run build`           | Typecheck, then build both production extensions                          |
-| `npm run build:chromium`  | Typecheck and build `dist/chromium`                                       |
-| `npm run build:firefox`   | Typecheck and build `dist/firefox`                                        |
-| `npm run package:firefox` | Typecheck, build Firefox and create `dist/crossmark-firefox.xpi` with WXT |
-| `npm run lint:firefox`    | Build Firefox and run Mozilla's `web-ext lint`                            |
-| `npm run sign:firefox`    | Build Firefox and submit it for unlisted AMO signing                      |
-| `npm run check`           | Typecheck, build both browsers and run isolated tests                     |
+| Command                    | Result                                                                    |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `npm run backend`          | Start/configure the Convex development backend                            |
+| `npm run dev`              | WXT Chromium development build and browser reloads                        |
+| `npm run dev:firefox`      | WXT Firefox development build and browser reloads                         |
+| `npm run build`            | Typecheck, then build both production extensions                          |
+| `npm run build:chromium`   | Typecheck and build `dist/chromium`                                       |
+| `npm run build:firefox`    | Typecheck and build `dist/firefox`                                        |
+| `npm run package`          | Typecheck, then zip Chromium and Firefox production builds                |
+| `npm run package:chromium` | Typecheck, build Chromium and create `dist/crossmark-chromium.zip`        |
+| `npm run package:firefox`  | Typecheck, build Firefox and create `dist/crossmark-firefox.xpi` with WXT |
+| `npm run lint:firefox`     | Build Firefox and run Mozilla's `web-ext lint`                            |
+| `npm run sign:firefox`     | Build Firefox and submit it for unlisted AMO signing                      |
+| `npm run check`            | Typecheck, build both browsers and run isolated tests                     |
 
 WXT calls the Chromium target `chrome`; a config hook retains the existing `dist/chromium` path. Development output goes to `dist/chromium-dev` and `dist/firefox-dev`. It includes WXT's local reload tooling and development permissions/CSP additions. The development-only `connect-src` additions allow the selected WXT server and its WebSocket; production keeps the original backend-only policy. Install or distribute the production output from `npm run build`.
 
-WXT opens disposable profiles by default. For a custom binary or manual installation, create an ignored `web-ext.config.ts` at the repository root:
+WXT opens disposable profiles by default. `wxt.config.ts` points `webExt.binaries` at `CHROME_BINARY` / `FIREFOX_BINARY` when set, otherwise the usual Chrome/Helium/Firefox install paths for this machine. Chrome is launched with `--disable-features=DisableLoadExtensionCommandLineSwitch` so `--load-extension` still works on Chrome 137+. Set `WXT_OPEN_BROWSER=0` to skip opening a window.
+
+For a personal binary, persistent Chromium profile or always-disabled launcher, create an ignored `web-ext.config.ts` at the repository root; it overrides the shared `webExt` config:
 
 ```ts
 import { defineWebExtConfig } from 'wxt';
@@ -39,8 +43,9 @@ import { defineWebExtConfig } from 'wxt';
 export default defineWebExtConfig({
   binaries: {
     chrome: '/path/to/chromium',
-    firefox: '/path/to/firefox',
+    firefox: 'firefoxdeveloperedition',
   },
+  chromiumArgs: ['--user-data-dir=./.wxt/chrome-data'],
   // Set disabled: true to load the dev build manually instead of opening a browser.
 });
 ```

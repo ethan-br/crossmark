@@ -1,0 +1,112 @@
+name: Convex preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: convex-preview-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    name: Deploy preview
+    if: github.event.pull_request.head.repo.full_name == github.repository && secrets.CONVEX_PREVIEW_DEPLOY_KEY != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      - name: Sanitize preview name
+        id: name
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          name="$(printf '%s' "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9/_-]/-/g' | cut -c1-100)"
+          echo "preview=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Convex preview
+        id: deploy
+        run: >
+          npx convex deploy --yes
+          --preview-name "${{ steps.name.outputs.preview }}"
+          --cmd "node scripts/write-preview-urls.mjs"
+          --message "Preview ${{ github.head_ref }} @ ${{ github.sha }}"
+
+      - name: Package extension against preview
+        run: |
+          set -a
+          # shellcheck disable=SC1091
+          source convex-preview.env
+          set +a
+          npx wxt zip
+          npx wxt zip -b firefox
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preview-extension
+          path: |
+            dist/crossmark-chromium.zip
+            dist/crossmark-firefox.xpi
+          retention-days: 5
+
+      - name: Comment preview URLs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- convex-preview -->';
+            const cloud = '${{ steps.deploy.outputs.convex_url }}';
+            const site = '${{ steps.deploy.outputs.convex_site_url }}';
+            const branch = '${{ github.head_ref }}';
+            const body = `${marker}
+            ## Convex preview
+
+            | | |
+            | --- | --- |
+            | Branch | \`${branch}\` |
+            | Functions | ${cloud} |
+            | HTTP / auth | ${site} |
+
+            Later pushes to this branch reuse the same preview instead of wiping its data. Convex deletes idle previews after a few days.
+
+            Extension zips from this job are baked against these URLs. Download the \`preview-extension\` artifact to try the PR backend; they are not production.
+
+            Google login on a preview also needs project-level **preview default** env vars (\`GOOGLE_CLIENT_ID\`, \`GOOGLE_CLIENT_SECRET\`, \`BETTER_AUTH_SECRET\`, \`AUTH_TRUSTED_ORIGINS\`) and this deployment's callback URI in Google Cloud:
+
+            \`${site}/api/auth/callback/google\`
+            `;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find(
+              (comment) => comment.user?.type === 'Bot' && comment.body?.includes(marker),
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

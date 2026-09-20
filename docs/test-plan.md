@@ -22,7 +22,7 @@ VITE_CONVEX_URL=http://127.0.0.1:3210 VITE_CONVEX_SITE_URL=http://127.0.0.1:3211
 npm run test:firefox-auth
 ```
 
-This fixture requires no Google credentials and never completes live sign-in. `npm run package:firefox` and `npm run lint:firefox` validate WXT's unsigned XPI and Mozilla manifest compatibility; live signing is a separate step requiring AMO credentials. See [WXT migration](wxt-migration.md) for production/dev paths and environment precedence.
+This fixture requires no Google credentials and never completes live sign-in. `npm run package:firefox` and `npm run lint:firefox` validate WXT's unsigned XPI and Mozilla manifest compatibility; live signing is a separate step requiring AMO credentials. Pull-request CI runs the isolated suite and both headless smokes; see [CI and deployments](ci.md). See [WXT migration](wxt-migration.md) for production/dev paths and environment precedence.
 
 ## Manual login and sync checklist
 

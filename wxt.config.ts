@@ -1,6 +1,48 @@
+import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { defineConfig } from 'wxt';
 import { extensionManifest } from './apps/extension/manifest';
+
+function existingPath(...candidates: Array<string | undefined>): string | undefined {
+  return candidates.find((candidate) => candidate !== undefined && existsSync(candidate));
+}
+
+function browserBinaries(): Record<string, string> {
+  // Env values win even when they are web-ext binary names rather than paths.
+  const chrome =
+    process.env.CHROME_BINARY ||
+    process.env.CHROMIUM_BINARY ||
+    existingPath(
+      process.platform === 'darwin'
+        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        : undefined,
+      process.platform === 'darwin'
+        ? '/Applications/Chromium.app/Contents/MacOS/Chromium'
+        : undefined,
+      process.platform === 'darwin' ? '/Applications/Helium.app/Contents/MacOS/Helium' : undefined,
+      process.platform === 'linux' ? '/usr/bin/google-chrome-stable' : undefined,
+      process.platform === 'linux' ? '/usr/bin/google-chrome' : undefined,
+      process.platform === 'linux' ? '/usr/bin/chromium-browser' : undefined,
+      process.platform === 'linux' ? '/usr/bin/chromium' : undefined,
+      process.platform === 'win32'
+        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+        : undefined,
+    );
+  const firefox =
+    process.env.FIREFOX_BINARY ||
+    existingPath(
+      process.platform === 'darwin'
+        ? '/Applications/Firefox.app/Contents/MacOS/firefox'
+        : undefined,
+      process.platform === 'linux' ? '/usr/bin/firefox' : undefined,
+      process.platform === 'linux' ? '/usr/bin/firefox-esr' : undefined,
+      process.platform === 'win32' ? 'C:\\Program Files\\Mozilla Firefox\\firefox.exe' : undefined,
+    );
+  return {
+    ...(chrome ? { chrome } : {}),
+    ...(firefox ? { firefox } : {}),
+  };
+}
 
 export default defineConfig({
   srcDir: 'apps/extension',
@@ -20,14 +62,21 @@ export default defineConfig({
   vite: ({ browser }) => ({
     build: { target: browser === 'firefox' ? 'firefox128' : 'chrome120' },
   }),
+  webExt: {
+    binaries: browserBinaries(),
+    // Chrome 137+ dropped --load-extension unless this feature flag is disabled.
+    chromiumArgs: ['--disable-features=DisableLoadExtensionCommandLineSwitch'],
+    disabled: process.env.WXT_OPEN_BROWSER === '0',
+  },
   hooks: {
     'config:resolved': ({ config }) => {
       // Keep the existing installation/signing paths, including separate dev builds.
       if (config.browser === 'chrome') {
         config.outDir = join(
           config.outBaseDir,
-          basename(config.outDir).replace('chrome', 'chromium'),
+          basename(config.outDir).replace(/^chrome/, 'chromium'),
         );
+        config.zip.artifactTemplate = 'crossmark-chromium.zip';
       } else if (config.browser === 'firefox') {
         config.zip.artifactTemplate = 'crossmark-firefox.xpi';
       }
@@ -49,7 +98,8 @@ export default defineConfig({
   },
   zip: {
     artifactTemplate: 'crossmark-{{browser}}.zip',
-    // The existing command produces an unsigned installable XPI, not a store submission.
+    // Local package commands produce unsigned installable archives, not store source-review bundles.
     zipSources: false,
+    exclude: ['**/*.map'],
   },
 });
