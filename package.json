@@ -10,9 +10,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run build && npm test",
-    "format": "prettier --write apps packages convex scripts tests docs README.md package.json tsconfig.json wxt.config.ts",
+    "format": "prettier --write apps packages convex scripts tests docs README.md package.json tsconfig.json wxt.config.ts .github",
     "test:browser": "node scripts/smoke.mjs",
     "test:firefox": "node scripts/firefox-smoke.mjs",
+    "package": "npm run typecheck && wxt zip && wxt zip -b firefox",
+    "package:chromium": "npm run typecheck && wxt zip",
     "package:firefox": "npm run typecheck && wxt zip -b firefox",
     "lint:firefox": "npm run build:firefox && web-ext lint --source-dir dist/firefox",
     "sign:firefox": "npm run build:firefox && node scripts/sign-firefox.mjs",
@@ -23,6 +25,9 @@
     "build:firefox": "npm run typecheck && wxt build -b firefox",
     "test:debug": "node scripts/debug-smoke.mjs",
     "test:firefox-auth": "node scripts/firefox-auth-smoke.mjs"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.12.5",

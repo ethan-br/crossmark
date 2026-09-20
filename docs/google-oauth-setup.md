@@ -49,6 +49,8 @@ Set these in the selected deployment's **Convex dashboard → Settings → Envir
 
 A random `BETTER_AUTH_SECRET` is already set on this workspace's local deployment. Do not rotate it during ordinary rebuilds: rotation invalidates sessions. New/cloud deployments need their own secret. Keep secrets out of source files and all `VITE_` or `WXT_` variables; only backend URLs are bundled in the extension.
 
+Pull-request preview deployments copy Convex **preview default** env vars. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` with `npx convex env default set --type preview …` as described in [CI and deployments](ci.md). Each preview still needs its own Google redirect URI, `https://<preview>.convex.site/api/auth/callback/google`.
+
 ## 4. Configure trusted origins
 
 With the checked-in Chromium public manifest key, the unpacked extension ID is `eblopgfhjccjncfjmgcjfahaggkcolok`. Firefox's stable add-on ID is `braunstein.ethan@gmail.com`. Start `AUTH_TRUSTED_ORIGINS` with this comma-separated value:

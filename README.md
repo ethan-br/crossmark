@@ -53,7 +53,7 @@ npm run dev:firefox  # Firefox
 
 WXT opens the extension in a disposable browser profile and reloads it as files change. Development builds use `dist/chromium-dev` and `dist/firefox-dev`, separately from production artifacts. The popup supports React hot updates; background changes restart the extension. There is no standalone web preview or preview tunnel.
 
-To use a particular browser binary or disable automatic browser startup, create an ignored `web-ext.config.ts`; see [the WXT migration guide](docs/wxt-migration.md) for examples, environment handling, and packaging details. `npm install` generates ignored WXT types automatically; `npm run typecheck` regenerates them when needed.
+`npm run dev` opens Google Chrome when it is installed at the usual macOS, Linux, or Windows path; `npm run dev:firefox` opens Firefox the same way. Override with `CHROME_BINARY` / `CHROMIUM_BINARY` or `FIREFOX_BINARY`. Set `WXT_OPEN_BROWSER=0` to build the dev extension without launching a window. Personal persistent profiles belong in an ignored `web-ext.config.ts`; see [the WXT migration guide](docs/wxt-migration.md). `npm install` generates ignored WXT types automatically; `npm run typecheck` regenerates them when needed.
 
 ## Google OAuth setup
 
@@ -90,6 +90,8 @@ Headless tests load the actual extension builds in disposable profiles. They ver
 
 `npm test` also checks the sync engine, adapters, OAuth callback validation, build endpoint validation and account authorization in isolation. These fixtures are test-only and are not included in either extension. On macOS Firefox smoke tests default to `/Applications/Firefox.app/Contents/MacOS/firefox`; override with `FIREFOX_BINARY` if needed. Selenium obtains geckodriver on its first run. Results and screenshots are in `output/verification/`. `npm run test:debug` checks the built Chromium debug controls without a backend; `npm run test:firefox-auth` checks the Firefox identity flow against its local fixture (see [validation](docs/test-plan.md)).
 
+GitHub Actions runs typecheck, unit tests and both browser smokes on every pull request. Pull requests from this repository also get a Convex preview deployment and unsigned zips baked against that backend. Pushes to `main` never upload an unsigned package; they sign Firefox when `package.json` version changes. See [CI and deployments](docs/ci.md).
+
 ## Debugging
 
 An opt-in background-console mode provides structured diagnostics, JSON export and local clearing without a rebuild. See [extension debug mode](docs/debugging.md) for the toggle, supported consoles and privacy details.
@@ -107,5 +109,6 @@ An opt-in background-console mode provides structured diagnostics, JSON export a
 | `convex`                               | Better Auth component, account authorization, sync and history    |
 | `apps/extension/manifest.ts`           | Shared permissions, backend origins and browser-specific settings |
 | `apps/extension/public/icons`          | Extension icons copied by WXT                                     |
-| `wxt.config.ts`                        | WXT builds, development server and Firefox packaging              |
-| `docs`                                 | Setup, architecture, privacy and validation                       |
+| `wxt.config.ts`                        | WXT builds, development browsers, packaging                       |
+| `.github/workflows`                    | Test, Convex preview/production and package/sign jobs             |
+| `docs`                                 | Setup, architecture, privacy, CI and validation                   |
