@@ -131,7 +131,7 @@ try {
   await driver.setContext('chrome');
   await driver.executeScript(
     'window.gBrowser.selectedBrowser.loadURI(Services.io.newURI(arguments[0]), {triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});',
-    `moz-extension://${uuid}/index.html`,
+    `moz-extension://${uuid}/${manifest.action.default_popup}`,
   );
   await driver.setContext('content');
   await driver.wait(until.elementLocated(By.css('#browser-name')), 15000);

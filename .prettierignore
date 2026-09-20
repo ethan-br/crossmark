@@ -1,5 +1,7 @@
 convex/_generated/
 dist/
+.wxt/
+.output/
 node_modules/
 output/
 IMPLEMENTATION_PLAN.md

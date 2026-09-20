@@ -2,14 +2,15 @@ import { Builder, By, until } from 'selenium-webdriver';
 import firefox from 'selenium-webdriver/firefox.js';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+const manifest = JSON.parse(await readFile('dist/firefox/manifest.json', 'utf8'));
 const uuid = randomUUID();
 const options = new firefox.Options()
   .addArguments('-headless')
   .setPreference(
     'extensions.webextensions.uuids',
-    JSON.stringify({ 'braunstein.ethan@gmail.com': uuid }),
+    JSON.stringify({ [manifest.browser_specific_settings.gecko.id]: uuid }),
   );
 if (process.env.FIREFOX_BINARY) options.setBinary(process.env.FIREFOX_BINARY);
 else if (process.platform === 'darwin')
@@ -35,7 +36,7 @@ try {
   await driver.setContext('chrome');
   await driver.executeScript(
     'window.gBrowser.selectedBrowser.loadURI(Services.io.newURI(arguments[0]), {triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});',
-    `moz-extension://${uuid}/index.html`,
+    `moz-extension://${uuid}/${manifest.action.default_popup}`,
   );
   await driver.setContext('content');
   await driver.wait(until.elementLocated(By.css('#browser-name')), 15000);

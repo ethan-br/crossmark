@@ -47,7 +47,7 @@ Set these in the selected deployment's **Convex dashboard → Settings → Envir
 | `BETTER_AUTH_SECRET`   | A random secret of at least 32 characters; generate with `openssl rand -base64 48` |
 | `AUTH_TRUSTED_ORIGINS` | Comma-separated origins from the next section                                      |
 
-A random `BETTER_AUTH_SECRET` is already set on this workspace's local deployment. Do not rotate it during ordinary rebuilds: rotation invalidates sessions. New/cloud deployments need their own secret. Keep secrets out of source files and all `VITE_` variables; only backend URLs are bundled in the extension.
+A random `BETTER_AUTH_SECRET` is already set on this workspace's local deployment. Do not rotate it during ordinary rebuilds: rotation invalidates sessions. New/cloud deployments need their own secret. Keep secrets out of source files and all `VITE_` or `WXT_` variables; only backend URLs are bundled in the extension.
 
 ## 4. Configure trusted origins
 
@@ -68,7 +68,7 @@ Append the returned `moz-extension://<uuid>` origin to `AUTH_TRUSTED_ORIGINS`. K
 
 The temporary development build and AMO-signed build use the same explicit `browser_specific_settings.gecko.id`, so their identity callback is the same. Signing does not replace the ID. If a distribution uses a different add-on ID, or a Firefox-based browser uses a different identity redirect domain, read `getRedirectURL('auth')` in that installed build and register its exact origin. Do not construct it from the profile UUID. Keep `/auth` in the generated callback; the per-attempt `state` query parameter is added at runtime and does not belong in configuration. The Google web client's registered callback remains the exact backend URL from section 2 in every case.
 
-For Chromium, inspect the service worker from the extensions manager and verify `chrome.runtime.id` and `chrome.identity.getRedirectURL('auth')`. Keep `scripts/chromium-key.json` stable across local builds. It contains only the public key, not a signing private key. Store distribution or a different key may change the ID and require updated trusted origins.
+For Chromium, inspect the service worker from the extensions manager and verify `chrome.runtime.id` and `chrome.identity.getRedirectURL('auth')`. Keep `apps/extension/chromium-key.json` stable across local builds. It contains only the public key, not a signing private key. WXT uses the same key for development and production builds. Store distribution or a different key may change the ID and require updated trusted origins.
 
 Do not copy the temporary Firefox origin from headless test output into a permanent configuration; it belongs to a disposable profile. Exact origin registration is used in this v0. See [Better Auth trusted origins](https://www.better-auth.com/docs/reference/security) for how request origins and redirect destinations are checked.
 
@@ -112,4 +112,4 @@ export AMO_JWT_SECRET='your-amo-jwt-secret'
 npm run sign:firefox
 ```
 
-The signed XPI is placed in `dist/signed/` and copied to `dist/crossmark-firefox-signed.xpi`. `web-ext sign` uses Mozilla's Add-ons signing API; “locally” means the command and credentials stay on your machine, while Mozilla performs the actual signature. This project uses the `unlisted` channel for private testing. Do not commit the credentials or put them in `.env`, `VITE_` variables or extension files.
+The signed XPI is placed in `dist/signed/` and copied to `dist/crossmark-firefox-signed.xpi`. `web-ext sign` uses Mozilla's Add-ons signing API; “locally” means the command and credentials stay on your machine, while Mozilla performs the actual signature. This project uses the `unlisted` channel for private testing. Do not commit the credentials or put them in `.env`, `VITE_` or `WXT_` variables or extension files.
