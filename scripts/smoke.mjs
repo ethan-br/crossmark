@@ -14,6 +14,7 @@ try {
   await mkdir('output/verification', { recursive: true });
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
   const id = new URL(worker.url()).host;
+  const popup = await worker.evaluate(() => chrome.runtime.getManifest().action.default_popup);
   const page = await context.newPage();
   await worker.evaluate(() =>
     chrome.bookmarks.create({
@@ -22,7 +23,7 @@ try {
       url: 'https://example.com/native',
     }),
   );
-  await page.goto(`chrome-extension://${id}/index.html`);
+  await page.goto(`chrome-extension://${id}/${popup}`);
   await expect(
     page.getByRole('button', { name: 'Sign in with Google', exact: true }),
   ).toBeVisible();

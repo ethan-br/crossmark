@@ -1,4 +1,5 @@
 {
+  "extends": "./.wxt/tsconfig.json",
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -6,11 +7,12 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "strict": true,
+    "noUncheckedIndexedAccess": false,
     "skipLibCheck": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["apps", "packages", "convex", "tests", "vite.config.ts"]
+  "include": ["apps", "packages", "convex", "tests", "wxt.config.ts", ".wxt/wxt.d.ts"]
 }

@@ -15,8 +15,9 @@ try {
     args: [`--disable-extensions-except=${path}`, `--load-extension=${path}`],
   });
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+  const popup = await worker.evaluate(() => chrome.runtime.getManifest().action.default_popup);
   const page = await context.newPage();
-  await page.goto(`chrome-extension://${new URL(worker.url()).host}/index.html`);
+  await page.goto(`chrome-extension://${new URL(worker.url()).host}/${popup}`);
   const command = (message) => page.evaluate((m) => chrome.runtime.sendMessage(m), message);
   await command({ type: 'state' });
   const snapshot = () => worker.evaluate(() => JSON.parse(crossmarkDebug.export()));

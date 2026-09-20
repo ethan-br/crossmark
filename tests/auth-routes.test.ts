@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { authenticatedBackend } from './fixtures/auth';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { extensionManifest } from '../apps/extension/manifest';
 const origin = 'chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok';
 const callback =
   'https://eblopgfhjccjncfjmgcjfahaggkcolok.chromiumapp.org/auth?state=extension-nonce';
@@ -44,8 +44,7 @@ it('starts Google OAuth through the real Better Auth HTTP route', async () => {
 });
 it('accepts the Firefox build callback and relays the unchanged Google URL', async () => {
   // Bind the regression to the actual build ID, not a mock browser identity.
-  const build = readFileSync(new URL('../scripts/build.mjs', import.meta.url), 'utf8');
-  const addonId = build.match(/gecko:\s*\{\s*id: '([^']+)'/)![1];
+  const addonId = extensionManifest('firefox', {}).browser_specific_settings!.gecko!.id!;
   const hash = createHash('sha1').update(addonId).digest('hex');
   const redirect = `https://${hash}.extensions.allizom.org/auth`;
   expect(redirect).toBe(
