@@ -6,18 +6,28 @@ import { Adapter } from '../apps/extension/src/adapter';
 import { MemoryBookmarks } from './fixtures/bookmarks';
 import { initialState, type State, type Store } from '../apps/extension/src/state';
 import type { ConvexHttpClient } from 'convex/browser';
+import { getFunctionName } from 'convex/server';
 async function setup() {
   const { t, auth } = await authenticatedBackend();
-  function device(name: string) {
-    let stored: State = { ...initialState(), name };
+  function device(name: string, browser = 'Chromium') {
+    let stored: State = { ...initialState(), name, browser };
     const store: Store = {
       read: async () => structuredClone(stored),
       write: async (s) => {
         stored = structuredClone(s);
       },
     };
-    const native = new MemoryBookmarks();
-    const adapter = new Adapter(native, false);
+    const native = new MemoryBookmarks(
+      browser === 'Firefox'
+        ? [
+            { id: 'toolbar_____', title: 'Toolbar' },
+            { id: 'unfiled_____', title: 'Other' },
+            { id: 'menu________', title: 'Menu' },
+            { id: 'mobile______', title: 'Mobile' },
+          ]
+        : undefined,
+    );
+    const adapter = new Adapter(native, browser === 'Firefox');
     const transport = { query: t.query.bind(t), mutation: t.mutation.bind(t) } as Pick<
       ConvexHttpClient,
       'query' | 'mutation'
@@ -44,6 +54,218 @@ async function ready(d: ReturnType<Awaited<ReturnType<typeof setup>>['device']>)
   return s;
 }
 describe('two-browser synchronization and recovery', () => {
+  it.each([
+    ['Helium', 'Chrome'],
+    ['Chrome', 'Helium'],
+    ['Chrome', 'Firefox'],
+    ['Firefox', 'Chrome'],
+    ['Helium', 'Firefox'],
+    ['Firefox', 'Helium'],
+  ])('reconciles %s into %s without changing existing cloud bookmarks', async (first, second) => {
+    const { device } = await setup();
+    const a = device('First', first),
+      b = device('Second', second);
+    const aRoot = first === 'Firefox' ? 'toolbar_____' : '1';
+    const bRoot = second === 'Firefox' ? 'toolbar_____' : '1';
+    const cloudFolder = await a.native.create({ parentId: aRoot, title: 'Work' });
+    await a.native.create({
+      parentId: cloudFolder.id,
+      title: 'Cloud title',
+      url: 'https://shared.example',
+    });
+    await a.engine.command({ type: 'connect', name: 'First' });
+    const original = (await a.store.read()).snapshot!.nodes;
+    const reused = await b.native.create({
+      parentId: bRoot,
+      title: 'Local title',
+      url: 'https://shared.example',
+    });
+    const localFolder = await b.native.create({ parentId: bRoot, title: 'Work' });
+    await b.native.create({
+      parentId: localFolder.id,
+      title: 'Extra copy',
+      url: 'https://shared.example',
+    });
+    await b.native.create({ parentId: localFolder.id, title: 'New', url: 'https://new.example' });
+    await b.native.create({ parentId: bRoot, title: 'New duplicate', url: 'https://new.example' });
+    await b.engine.command({ type: 'connect', name: 'Second' });
+    expect((await b.store.read()).status).toBe('review');
+    await b.engine.command({ type: 'approve' });
+    const joined = await ready(b);
+    await ready(a);
+    expect(joined.snapshot!.nodes).toHaveLength(3);
+    for (const n of original) expect(joined.snapshot!.nodes).toContainEqual(n);
+    for (const d of [a, b]) {
+      expect(d.native.nodes.filter((n) => n.url)).toHaveLength(2);
+      const shared = d.native.nodes.find((n) => n.url === 'https://shared.example')!;
+      expect(shared.title).toBe('Cloud title');
+      expect(d.native.nodes.find((n) => n.id === shared.parentId)?.title).toBe('Work');
+    }
+    expect(b.native.nodes.find((n) => n.url === 'https://shared.example')?.id).toBe(reused.id);
+    const revision = joined.snapshot!.revision;
+    await b.engine.command({ type: 'approve' });
+    await b.engine.command({ type: 'connect', name: 'Second' });
+    await b.engine.command({ type: 'disconnect' });
+    await b.engine.command({ type: 'connect', name: 'Second' });
+    await b.engine.command({ type: 'approve' });
+    expect((await ready(b)).snapshot!.revision).toBe(revision);
+    expect((await ready(a)).snapshot!.nodes).toEqual(joined.snapshot!.nodes);
+  });
+
+  it('uses the latest cloud state when two browsers approve overlapping new URLs', async () => {
+    const { device } = await setup();
+    const a = device('A'),
+      b = device('B'),
+      c = device('C');
+    await a.engine.command({ type: 'connect', name: 'A' });
+    for (const d of [b, c]) {
+      await d.native.create({ parentId: '1', title: 'Shared new URL', url: 'https://new.example' });
+      await d.engine.command({ type: 'connect', name: 'Joining' });
+    }
+    await b.engine.command({ type: 'approve' });
+    await c.engine.command({ type: 'approve' });
+    for (const d of [a, b, c]) {
+      expect((await ready(d)).snapshot!.nodes).toHaveLength(1);
+      expect(d.native.nodes.filter((n) => n.url)).toHaveLength(1);
+    }
+  });
+
+  it('preserves cloud duplicates, menu roots and separators through a Chromium reconnect', async () => {
+    const { device } = await setup();
+    const a = device('Firefox', 'Firefox'),
+      b = device('Chrome', 'Chrome');
+    await a.native.create({ parentId: 'menu________', title: '', type: 'separator' });
+    for (let i = 0; i < 2; i++)
+      await a.native.create({
+        parentId: 'menu________',
+        title: `Cloud ${i}`,
+        url: 'https://same.example',
+      });
+    await a.engine.command({ type: 'connect', name: 'Firefox' });
+    for (let i = 0; i < 3; i++)
+      await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://same.example' });
+    const original = (await a.store.read()).snapshot!;
+    await b.engine.command({ type: 'connect', name: 'Chrome' });
+    await b.engine.command({ type: 'approve' });
+    expect((await ready(b)).snapshot!.nodes).toEqual(original.nodes);
+    expect(b.native.nodes.filter((n) => n.url)).toHaveLength(2);
+    expect(b.native.nodes.filter((n) => n.type === 'separator')).toHaveLength(0);
+    await b.engine.command({ type: 'disconnect' });
+    await b.engine.command({ type: 'connect', name: 'Chrome' });
+    await b.engine.command({ type: 'approve' });
+    expect((await ready(b)).snapshot!.nodes).toEqual(original.nodes);
+    expect(b.native.nodes.filter((n) => n.title === 'Bookmarks Menu')).toHaveLength(1);
+    expect((await ready(a)).snapshot!.revision).toBe(original.revision);
+  });
+
+  it('merges duplicate local folders and moves their new children before deleting surplus folders', async () => {
+    const { a, device } = await connectPair();
+    const b = device('Joining');
+    for (let i = 0; i < 2; i++) {
+      const folder = await b.native.create({ parentId: '1', title: 'Work' });
+      await b.native.create({
+        parentId: folder.id,
+        title: `New ${i}`,
+        url: `https://new.example/${i}`,
+      });
+    }
+    await b.engine.command({ type: 'connect', name: 'Joining' });
+    await b.engine.command({ type: 'approve' });
+    expect((await ready(b)).snapshot!.nodes).toHaveLength(4);
+    await ready(a);
+    for (const d of [a, b]) {
+      const folders = d.native.nodes.filter((n) => n.title === 'Work');
+      expect(folders).toHaveLength(1);
+      expect(d.native.nodes.filter((n) => n.parentId === folders[0].id)).toHaveLength(2);
+    }
+  });
+
+  it('recovers a lost join response across restart and captures subsequent native edits', async () => {
+    const { a, device } = await connectPair();
+    const b = device('Joining');
+    const native = await b.native.create({
+      parentId: '1',
+      title: 'New',
+      url: 'https://new.example',
+    });
+    await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://one.example' });
+    await b.engine.command({ type: 'connect', name: 'Joining' });
+    const normal = b.transport.mutation;
+    let fail = true;
+    b.transport.mutation = (async (...args: Parameters<typeof normal>) => {
+      const result = await normal(args[0], args[1]);
+      if (fail && getFunctionName(args[0]) === 'sync:join') {
+        fail = false;
+        throw new TypeError('Join response lost');
+      }
+      return result;
+    }) as typeof normal;
+    await b.engine.command({ type: 'approve' });
+    expect((await b.store.read()).joinLocal).toHaveLength(2);
+    await b.native.update(native.id, { title: 'Edited during retry' });
+    const restarted = new Engine(
+      b.store,
+      b.adapter,
+      'http://127.0.0.1:3210',
+      undefined,
+      b.transport,
+      b.auth,
+    );
+    await restarted.command({ type: 'sync' });
+    const state = await ready(b);
+    expect(state.joinLocal).toBeUndefined();
+    expect(state.snapshot!.nodes).toHaveLength(2);
+    await ready(a);
+    expect(a.native.nodes.find((n) => n.url === 'https://new.example')?.title).toBe(
+      'Edited during retry',
+    );
+    expect(state.snapshot!.activity.filter((n) => n.kind === 'create')).toHaveLength(1);
+  });
+
+  it('recovers a native duplicate removal whose storage acknowledgement was lost', async () => {
+    const { a, device } = await connectPair();
+    const b = device('Joining');
+    for (let i = 0; i < 2; i++)
+      await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://one.example' });
+    await b.engine.command({ type: 'connect', name: 'Joining' });
+    const remove = b.native.remove.bind(b.native);
+    let fail = true;
+    b.native.remove = async (id) => {
+      await remove(id);
+      if (fail) {
+        fail = false;
+        throw new Error('Interrupted removal');
+      }
+    };
+    await b.engine.command({ type: 'approve' });
+    expect((await b.store.read()).journal?.kind).toBe('delete');
+    await b.engine.command({ type: 'sync' });
+    expect((await ready(b)).joinAliases).toBeUndefined();
+    expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
+    expect((await ready(a)).snapshot!.nodes).toHaveLength(1);
+  });
+
+  it('preserves a new URL edited into a surplus copy while joining is interrupted', async () => {
+    const { a, device } = await connectPair();
+    const b = device('Joining');
+    for (let i = 0; i < 2; i++)
+      await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://one.example' });
+    await b.engine.command({ type: 'connect', name: 'Joining' });
+    const query = vi
+      .spyOn(b.transport, 'query')
+      .mockRejectedValueOnce(new TypeError('Network offline'));
+    await b.engine.command({ type: 'approve' });
+    query.mockRestore();
+    const state = await b.store.read();
+    const surplus = Object.keys(state.joinAliases!)[0];
+    expect(surplus).toBeDefined();
+    await b.native.update(state.mappings[surplus], { url: 'https://edited.example' });
+    await b.engine.command({ type: 'sync' });
+    expect((await ready(b)).snapshot!.nodes).toHaveLength(2);
+    await ready(a);
+    expect(a.native.nodes.filter((n) => n.url === 'https://edited.example')).toHaveLength(1);
+  });
+
   it('seeds once and a new empty browser receives the collection', async () => {
     const { a, b } = await connectPair();
     expect((await ready(a)).snapshot?.nodes).toHaveLength(1);
@@ -90,8 +312,9 @@ describe('two-browser synchronization and recovery', () => {
     await b.engine.command({ type: 'approve' });
     await ready(a);
     await ready(b);
-    expect(b.native.nodes.filter((n) => n.url)).toHaveLength(2);
-    expect(a.native.nodes.filter((n) => n.url)).toHaveLength(2);
+    expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
+    expect(a.native.nodes.filter((n) => n.url)).toHaveLength(1);
+    expect(b.native.nodes.find((n) => n.url)?.title).toBe('A');
   });
   it('retains paused changes durably and resumes them', async () => {
     const { a, b } = await connectPair();

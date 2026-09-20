@@ -44,7 +44,7 @@ There is no web preview or preview tunnel. Test the built extensions in headless
 
 **A Google OAuth web client has not been created yet.** The extension installs and opens, but Google sign-in requires backend configuration. Follow [the setup guide](docs/google-oauth-setup.md) to create the client, configure Convex secrets and trusted origins, and test the complete login flow. Do not put the Google client secret in a `VITE_` variable or extension file.
 
-Sign in with the same Google account in each browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically. A nonempty joining browser requires explicit merge approval; duplicate URLs are preserved. Signing out does not delete native bookmarks or the account's server collection.
+Sign in with the same Google account in each browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically. A nonempty joining browser requires explicit merge approval. Joining matches bookmarks by exact URL across all folders, keeps cloud titles and hierarchy, and imports only new URLs; existing cloud duplicates remain intact. See the [matching policy](docs/v0-decisions.md#initialization-and-joining) for folder and URL details. Signing out does not delete native bookmarks or the account's server collection.
 
 Use one Crossmark installation per independently native-synced collection. Connecting installations already exchanging bookmarks through a browser vendor's sync can introduce duplicates.
 

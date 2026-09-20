@@ -29,6 +29,8 @@ export interface State {
   snapshot?: Snapshot;
   journal?: Journal;
   joining: boolean;
+  joinLocal?: Node[];
+  joinAliases?: Record<string, string>;
   initialized: boolean;
   safetyApproved: boolean;
   reviewCount?: number;

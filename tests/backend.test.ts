@@ -39,12 +39,18 @@ describe('Convex authorization and durable operations', () => {
     await expect(unauthenticated.query(api.sync.snapshot, { deviceId })).rejects.toThrow(
       'Unauthenticated',
     );
+    await expect(unauthenticated.mutation(api.sync.join, { deviceId, nodes: [] })).rejects.toThrow(
+      'Unauthenticated',
+    );
     const expired = await account('expired@example.com', Date.now() - 1000);
     await expect(expired.t.query(api.sync.snapshot, { deviceId })).rejects.toThrow(
       'Unauthenticated',
     );
     await t.mutation(api.sync.revoke, { deviceId, targetDeviceId: deviceId });
     await expect(t.query(api.sync.snapshot, { deviceId })).rejects.toThrow('disconnected');
+    await expect(t.mutation(api.sync.join, { deviceId, nodes: [] })).rejects.toThrow(
+      'disconnected',
+    );
   });
   it('isolates Google accounts on reads, writes and revocation', async () => {
     const { t, account, deviceId } = await setup();
@@ -60,6 +66,9 @@ describe('Convex authorization and durable operations', () => {
     );
     await expect(
       t.mutation(api.sync.push, { deviceId: second.deviceId, operations: [] }),
+    ).rejects.toThrow('disconnected');
+    await expect(
+      t.mutation(api.sync.join, { deviceId: second.deviceId, nodes: [] }),
     ).rejects.toThrow('disconnected');
     await expect(
       t.mutation(api.sync.revoke, { deviceId, targetDeviceId: second.deviceId }),

@@ -91,10 +91,14 @@ export class Adapter {
       for (const child of n.children ?? []) collect(child);
     };
     for (const n of tree) collect(n);
-    if (Object.values(extra).some((id) => !nativeIds.has(id)))
-      throw new Error(
-        'A mapped bookmark root was removed. Reconnect this browser to review its collection safely.',
-      );
+    for (const [key, id] of Object.entries(extra))
+      if (!nativeIds.has(id)) {
+        if (!state.connected && !state.registrationPending) delete extra[key];
+        else
+          throw new Error(
+            'A mapped bookmark root was removed. Reconnect this browser to review its collection safely.',
+          );
+      }
     state.roots = { ...extra, ...discovered };
     const byNative = new Map(Object.entries(state.mappings).map(([id, native]) => [native, id]));
     const previous = new Map(state.baseline.map((n) => [n.id, n]));
