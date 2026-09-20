@@ -5,6 +5,7 @@ import { authComponent } from './auth';
 import type { Id } from './_generated/dataModel';
 import { validateTree, type Node, type Operation } from '../packages/model';
 import { applyOperation } from '../packages/sync-core';
+import { reconcileJoin } from '../packages/sync-core/join';
 const fail = (message: string): never => {
   throw new ConvexError(message);
 };
@@ -79,6 +80,43 @@ export const connect = mutation({
         reason: 'First browser snapshot',
       });
     return { deviceId, joining };
+  },
+});
+// Import against the current collection in one transaction. Persist the result
+// so a lost response cannot repeat the import or change native identity adoption.
+export const join = mutation({
+  args: { deviceId: v.id('devices'), nodes: v.array(node) },
+  handler: async (ctx, { deviceId, nodes: local }) => {
+    const device = await authenticate(ctx, deviceId);
+    if (device.joinMatches) return device.joinMatches;
+    const collection = await ctx.db.get(device.collectionId);
+    if (!collection) return fail('Collection unavailable.');
+    if (device.sequence !== 0) return fail('This browser has already uploaded changes.');
+    const { additions, matches } = reconcileJoin(collection.nodes, local);
+    const nodes: Node[] = [...collection.nodes];
+    let revision = collection.revision;
+    for (const node of additions) {
+      const added = { ...node, revision: ++revision, deleted: false };
+      nodes.push(added);
+      await ctx.db.insert('operations', {
+        collectionId: device.collectionId,
+        deviceId,
+        operationId: `join:${node.id}`,
+        sequence: 0,
+        revision,
+        nodeId: node.id,
+        title: node.title,
+        kind: 'create',
+        device: device.name,
+        at: Date.now(),
+        conflict: false,
+        after: added,
+      });
+    }
+    validateTree(nodes);
+    await ctx.db.patch(collection._id, { nodes, revision });
+    await ctx.db.patch(deviceId, { joinMatches: matches, lastSeen: Date.now() });
+    return matches;
   },
 });
 export const snapshot = query({

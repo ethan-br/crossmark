@@ -19,7 +19,7 @@ Screenshots and results are written to `output/verification/chromium-*` and `fir
 Complete [Google OAuth setup](google-oauth-setup.md), build and load both extensions in disposable profiles with test bookmarks.
 
 1. Sign in with Google in Chromium. Confirm account email, browser name and seeded bookmark counts. Close and reopen the popup during and after login; the background should complete the operation.
-2. Sign in with the same account in Firefox. Confirm existing Firefox bookmarks remain unchanged until merge approval. Approve and check both collections, including intentional duplicate URLs.
+2. Sign in with the same account in Firefox. Confirm existing Firefox bookmarks remain unchanged until merge approval. Include overlapping URLs with different titles/folders, repeated local URLs, and new URLs. Approve and check that cloud titles/hierarchy and existing cloud duplicates survive, only new URLs are imported, and surplus local copies disappear. Retry and sign out/in to verify stable counts. Repeat in both directions for Chrome, Helium and Firefox.
 3. Add, rename, move, reorder and delete native bookmarks in both browsers. Check convergence, exact URLs, Firefox menu mapping and separator retention. Repeat sync without edits and check no extra activity appears.
 4. Pause one browser, make local changes, and resume. Check pending changes survive popup/background restarts and upload once. Test network loss and reconnection.
 5. Delete a folder, restore it from Activity, and confirm its descendants return. Export from Settings and check it contains bookmark/recovery data without sessions or credentials.

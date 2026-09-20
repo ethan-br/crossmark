@@ -138,7 +138,7 @@ export class Engine {
         return publicState(await this.store.read());
       }
       if (command.type === 'disconnect') {
-        await this.capture(state);
+        if (!state.joining) await this.capture(state);
         if (state.outbox.length)
           throw new Error(
             'Sync your pending changes before disconnecting. You can also export them from Settings.',
@@ -157,7 +157,9 @@ export class Engine {
             throw error;
         }
         await this.auth?.signOut();
-        state = initialState();
+        // Synthetic menu/mobile folders remain native roots after sign-out.
+        // Retain only root IDs so reconnecting cannot import those wrappers.
+        state = { ...initialState(), roots: state.roots };
         await this.save(state);
         return publicState(state);
       }
@@ -224,7 +226,28 @@ export class Engine {
   }
   private async capture(state: State) {
     const local = await this.adapter.read(state);
-    const ops = diff(state.baseline, local, state.sequence);
+    // Surplus join copies stay in the native baseline until journaled deletion.
+    // They must never become cloud creates/updates/deletes during recovery.
+    const aliases = state.joinAliases ?? {};
+    const ignoredBefore = new Set(Object.keys(aliases));
+    for (const n of local)
+      if (aliases[n.id] && n.kind === 'bookmark') {
+        const previous = state.baseline.find((old) => old.id === n.id);
+        // A user may turn a surplus copy into a new bookmark while projection
+        // is interrupted. Import that edit instead of discarding it with the copy.
+        if (previous && previous.url !== n.url) delete aliases[n.id];
+      }
+    const ops = diff(
+      state.baseline.filter((n) => !ignoredBefore.has(n.id)),
+      local.filter((n) => !aliases[n.id]),
+      state.sequence,
+    );
+    for (const op of ops) {
+      if (op.node)
+        op.node = { ...op.node, parentId: aliases[op.node.parentId] ?? op.node.parentId };
+      if (op.fields?.parentId)
+        op.fields.parentId = aliases[op.fields.parentId] ?? op.fields.parentId;
+    }
     debug.event('sync.capture', 'success', { count: ops.length });
     if (ops.length) {
       if (ops.length > 50 || ops.filter((o) => o.kind === 'delete').length > 20) {
@@ -234,8 +257,8 @@ export class Engine {
       }
       state.outbox.push(...ops);
       state.sequence += ops.length;
-      state.baseline = local;
     }
+    state.baseline = local;
     await this.save(state);
     return ops.length;
   }
@@ -250,18 +273,43 @@ export class Engine {
     try {
       await this.adapter.recover(state, this.store);
       if (state.joining) {
-        if (state.baseline.length && !state.safetyApproved) {
+        const local = state.joinLocal ?? (await this.adapter.read(state));
+        if (local.length && !state.safetyApproved) {
           state.status = 'review';
+          state.reviewCount = local.length;
           debug.event('sync.exchange', 'review');
           await this.save(state);
           return;
         }
-        const local = await this.adapter.read(state);
-        // Local nodes retain independent identities; matching URLs are never deduplicated.
-        const ops = diff([], local, state.sequence);
-        state.outbox.push(...ops);
-        state.sequence += ops.length;
-        state.baseline = local;
+        if (state.paused) return;
+        await this.authorize();
+        state.joinLocal = local;
+        await this.save(state);
+        const matches = await this.client.mutation(api.sync.join, {
+          deviceId: state.deviceId as Id<'devices'>,
+          nodes: local,
+        });
+        const adopted = new Map<string, string>();
+        const used = new Set<string>();
+        state.joinAliases = {};
+        const mappings = { ...state.mappings };
+        for (const { localId, nodeId } of matches) {
+          if (used.has(nodeId)) {
+            state.joinAliases[localId] = nodeId;
+            continue;
+          }
+          used.add(nodeId);
+          adopted.set(localId, nodeId);
+          delete mappings[localId];
+          mappings[nodeId] = state.mappings[localId];
+        }
+        state.mappings = mappings;
+        state.baseline = local.map((n) => ({
+          ...n,
+          id: adopted.get(n.id) ?? n.id,
+          parentId: adopted.get(n.parentId) ?? n.parentId,
+        }));
+        delete state.joinLocal;
         state.joining = false;
         state.initialized = true;
         await this.save(state);
@@ -323,6 +371,7 @@ export class Engine {
         state.status = 'ready';
         state.failures = 0;
         state.safetyApproved = false;
+        delete state.joinAliases;
         delete state.reviewCount;
         delete state.error;
         state.needsSignIn = false;

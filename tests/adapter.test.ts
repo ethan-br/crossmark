@@ -63,8 +63,12 @@ describe('browser projections', () => {
     expect(state.roots.menu).toBeDefined();
     await adapter.ensureRoots(state, store, [node]);
     expect(native.nodes.filter((n) => n.title === 'Bookmarks Menu')).toHaveLength(1);
+    state.connected = true;
     await native.remove(state.roots.menu);
     await expect(adapter.read(state)).rejects.toThrow('mapped bookmark root');
+    state.connected = false;
+    await expect(adapter.read(state)).resolves.toEqual([]);
+    expect(state.roots.menu).toBeUndefined();
   });
   it('refuses ambiguous local and account bookmark roots', async () => {
     const native = new MemoryBookmarks([
