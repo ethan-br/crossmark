@@ -586,10 +586,34 @@ describe('browser controls', () => {
     await ready(b);
     expect((await peer(b, a)).paused).toBe(true);
   });
+  it('does not clear a remote pause on Sync now', async () => {
+    const { a, b } = await connectPair();
+    const target = (await b.store.read()).deviceId!;
+    await a.engine.command({ type: 'pauseDevice', deviceId: target, paused: true });
+    await b.engine.sync();
+    await b.engine.command({ type: 'sync' });
+    expect((await b.store.read()).paused).toBe(true);
+    await ready(a);
+    expect((await peer(a, b)).paused).toBe(true);
+  });
+  it('shows a peer change made from a paused browser', async () => {
+    const { a, b } = await connectPair();
+    await a.engine.command({ type: 'pause' });
+    await a.engine.command({
+      type: 'pauseDevice',
+      deviceId: (await b.store.read()).deviceId!,
+      paused: true,
+    });
+    expect((await peer(a, b)).paused).toBe(true);
+  });
   it('disconnects another browser and removes it from the collection', async () => {
     const { a, b } = await connectPair();
+    await a.native.create({ parentId: '1', title: 'Unsynced', url: 'https://unsynced.example' });
     await a.engine.command({ type: 'revoke', deviceId: (await b.store.read()).deviceId! });
     expect((await peer(a, b)).revoked).toBe(true);
+    const acting = await a.store.read();
+    expect(acting.outbox).toHaveLength(0);
+    expect(acting.snapshot!.nodes.some((n) => n.url === 'https://unsynced.example')).toBe(true);
     await b.engine.sync();
     expect((await b.store.read()).status).toBe('error');
     expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);

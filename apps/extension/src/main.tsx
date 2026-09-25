@@ -476,7 +476,9 @@ function App() {
                       <div className="cm-actions">
                         <button
                           className="cm-primary"
-                          disabled={busy || status === 'syncing'}
+                          disabled={
+                            busy || status === 'syncing' || (state.paused && !state.needsSignIn)
+                          }
                           onClick={() =>
                             state.needsSignIn ? setReauth(true) : act({ type: 'sync' })
                           }

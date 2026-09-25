@@ -138,7 +138,7 @@ export class Engine {
           deviceId: state.deviceId as Id<'devices'>,
           targetDeviceId: command.deviceId as Id<'devices'>,
         });
-        await this.refresh();
+        await this.exchangeAndRefresh();
         return publicState(await this.store.read());
       }
       if (command.type === 'pauseDevice' && remotePause) {
@@ -147,7 +147,7 @@ export class Engine {
           targetDeviceId: command.deviceId as Id<'devices'>,
           paused: command.paused,
         });
-        await this.refresh();
+        await this.exchangeAndRefresh();
         return publicState(await this.store.read());
       }
       if (command.type === 'disconnect') {
@@ -227,11 +227,6 @@ export class Engine {
       if (!state.paused || ['sync', 'pause', 'pauseDevice'].includes(command.type)) {
         delete state.nextRetryAt;
         await this.save(state);
-        if (command.type === 'sync' && state.paused) {
-          state.paused = false;
-          state.pausePending = true;
-          await this.save(state);
-        }
         await this.exchange();
       }
       return publicState(await this.store.read());
@@ -240,12 +235,20 @@ export class Engine {
   sync() {
     return this.run(() => this.exchange());
   }
-  private async refresh() {
+  // A paused exchange skips the snapshot. The peer change has already committed,
+  // so a failed fetch only delays the browser list until the next exchange.
+  private async exchangeAndRefresh() {
+    await this.exchange();
     const state = await this.store.read();
-    state.snapshot = (await this.client.query(api.sync.snapshot, {
-      deviceId: state.deviceId as Id<'devices'>,
-    })) as Snapshot;
-    await this.save(state);
+    if (!state.paused) return;
+    try {
+      state.snapshot = (await this.client.query(api.sync.snapshot, {
+        deviceId: state.deviceId as Id<'devices'>,
+      })) as Snapshot;
+      await this.save(state);
+    } catch {
+      debug.event('sync.exchange', 'failure');
+    }
   }
   // Report an unacknowledged local pause change; otherwise adopt the server flag,
   // which another browser in the collection may have changed.
