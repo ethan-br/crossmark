@@ -154,5 +154,5 @@ export default defineBackground(() => {
   void storage.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' });
   void browser.alarms.create('crossmark-heartbeat', { periodInMinutes: 0.5 });
   void store.read().then((s) => badge(publicState(s)));
-  void engine.sync();
+  void engine.startup();
 });

@@ -14,13 +14,13 @@ Email/password is the only login method. The popup sends the email and password 
 
 ## Native application and recovery
 
-Canonical IDs are independent of native IDs and URLs. Intentional duplicate URLs survive seeding and ordinary edits. Joining uses the [content matching policy](v0-decisions.md#initialization-and-joining) to adopt cloud identities and import genuinely new content in one Convex transaction against the current collection. The device stores the join result, and the extension stores its input before sending it, so a lost response reuses the same identity mapping. Native mappings and the baseline are then saved together before projection; surplus local copies remain tracked until journaled deletion completes. Existing cloud duplicates remain intact.
+Canonical IDs are independent of native IDs and URLs. Intentional duplicate URLs survive seeding and ordinary edits. The first browser seeds the collection from its local tree. Later browsers retain their original local snapshot for export, remove user nodes under the portable roots with journaled child-first writes, and install the current cloud tree. Managed roots are excluded. A persisted wipe phase prevents an interrupted installation from removing cloud nodes already created on restart.
 
-The initial snapshot is stored before registration, allowing an interrupted first registration to retry with the same installation ID, account and baseline. Subsequent native edits are then diffed rather than mistaken for part of the uploaded seed. Joining similarly captures changes made after its persisted input before applying the canonical state.
+The initial snapshot is stored before registration, allowing an interrupted first registration to retry with the same installation ID, account and baseline. Subsequent native edits are then diffed rather than mistaken for part of the uploaded seed. A joining browser never uploads its original local tree. Once installed, native IDs map to canonical IDs and ordinary sync updates only changed nodes.
 
 Every native mutation has a persisted journal. A create journal stores the intended node and the parent's pre-write child IDs. After restart, a single matching newly appearing child is adopted; ambiguous candidates stop synchronization. Update, move, and delete are replayed idempotently. Expected index shifts update the baseline, so native reorder echoes do not generate redundant remote writes.
 
-Before each native write the engine rereads the tree. Unexpected differences are captured and uploaded before continuing remote projection. Events are never globally suppressed. Removing a folder uses nonrecursive `remove`; a new local child prevents destructive removal. The native API still has a read/write race window: a user can change the exact same field between the check and the write. This v0 does not claim atomicity against simultaneous native user edits.
+Before each native write the engine rereads the tree. Unexpected differences on an already connected browser are captured and uploaded before continuing remote projection. During joining, they are included in the local tree being replaced. Events are never globally suppressed. Removing a folder uses nonrecursive `remove`; a new local child prevents destructive removal. The native API still has a read/write race window: a user can change the exact same field between the check and the write. This v0 does not claim atomicity against simultaneous native user edits.
 
 ## Browser roots
 
@@ -30,6 +30,6 @@ The Chromium folder named “Bookmarks Menu” directly under the selected Other
 
 ## Lifecycle
 
-All listeners register synchronously. An alarm polls every 30 seconds; the browser may defer it during sleep. Failures persist a bounded exponential retry time with jitter. Explicit retry bypasses the wait. Incoming changes are pulled durably; no permanent worker or WebSocket lifetime is assumed.
+All listeners register synchronously. An alarm polls every 30 seconds; the browser may defer it during sleep. Failures persist a bounded exponential retry time with jitter. Startup and explicit retry bypass the wait while respecting Pause. Incoming changes are pulled durably; no permanent worker or WebSocket lifetime is assumed.
 
 Reference APIs: [Chrome bookmarks](https://developer.chrome.com/docs/extensions/reference/api/bookmarks), [Chrome alarms](https://developer.chrome.com/docs/extensions/reference/api/alarms), [Firefox background scripts](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background), and [Convex local development](https://docs.convex.dev/cli/local-deployments).
