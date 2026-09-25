@@ -50,7 +50,7 @@
     "selenium-webdriver": "^4.49.0",
     "typescript": "^7.0.2",
     "vite": "^7.1.0",
-    "vitest": "^4.1.11",
+    "vitest": "^5.0.1",
     "web-ext": "^10.6.0",
     "wxt": "^0.21.4"
   }
