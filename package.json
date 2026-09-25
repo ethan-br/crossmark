@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.12.5",
-    "better-auth": "1.6.33",
+    "better-auth": "1.7.5",
     "convex": "^1.31.0",
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",
