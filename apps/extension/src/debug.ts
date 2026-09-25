@@ -9,7 +9,6 @@ const operations = [
   'command.connect',
   'command.disconnect',
   'command.revoke',
-  'command.restore',
   'command.sync',
   'command.pause',
   'command.approve',

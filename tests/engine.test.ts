@@ -220,7 +220,7 @@ describe('two-browser synchronization and recovery', () => {
     expect(a.native.nodes.find((n) => n.url === 'https://new.example')?.title).toBe(
       'Edited during retry',
     );
-    expect(state.snapshot!.activity.filter((n) => n.kind === 'create')).toHaveLength(1);
+    expect(state.snapshot!.activity.filter((n) => n.kind === 'added')).toHaveLength(1);
   });
 
   it('recovers a native duplicate removal whose storage acknowledgement was lost', async () => {

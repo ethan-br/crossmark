@@ -15,7 +15,6 @@ export type Command =
   | { type: 'approve' }
   | { type: 'disconnect' }
   | { type: 'revoke'; deviceId: string }
-  | { type: 'restore'; activityId: string }
   | { type: 'export' };
 export class Engine {
   private serial: Promise<unknown> = Promise.resolve();
@@ -127,7 +126,7 @@ export class Engine {
         return publicState(await this.store.read());
       }
       if (!state.deviceId || !state.connected) throw new Error('Sign in to connect this browser.');
-      if (['revoke', 'approve', 'restore'].includes(command.type)) await this.authorize();
+      if (['revoke', 'approve'].includes(command.type)) await this.authorize();
       if (command.type === 'revoke') {
         await this.client.mutation(api.sync.revoke, {
           deviceId: state.deviceId as Id<'devices'>,
@@ -175,37 +174,6 @@ export class Engine {
         });
         state.safetyApproved = true;
         state.status = 'ready';
-        await this.save(state);
-      }
-      if (command.type === 'restore') {
-        const event = state.snapshot?.activity.find((a) => a.id === command.activityId);
-        if (!event?.before) throw new Error('This change has no earlier version to restore.');
-        // Recover a folder and its tombstoned descendants as explicit operations.
-        const source = state.snapshot!.nodes;
-        const restore = [event.attempted ?? event.before];
-        if (event.before.kind === 'folder') {
-          const ids = new Set([event.nodeId]);
-          let added = true;
-          while (added) {
-            added = false;
-            for (const n of source)
-              if (n.deleted && ids.has(n.parentId) && !ids.has(n.id)) {
-                ids.add(n.id);
-                restore.push(n);
-                added = true;
-              }
-          }
-        }
-        for (const n of parentFirst(restore.map((n) => ({ ...n, deleted: false })))) {
-          state.outbox.push({
-            id: crypto.randomUUID(),
-            sequence: ++state.sequence,
-            nodeId: n.id,
-            baseRevision: source.find((x) => x.id === n.id)?.revision ?? 0,
-            kind: 'restore',
-            node: { ...n, deleted: false },
-          });
-        }
         await this.save(state);
       }
       if (!state.paused || command.type === 'sync') {

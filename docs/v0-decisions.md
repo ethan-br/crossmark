@@ -2,7 +2,7 @@
 
 ## Synchronization
 
-Independent fields merge through field patches. Competing updates to the same field follow Convex's serialized commit order; the previous version is retained in history. A stale edit cannot revive a tombstone. Its attempted value is retained and can be explicitly restored. Subtree deletion tombstones the known descendants. A later child addition to a deleted folder is placed in Other. A concurrent move that would produce a cycle also moves the incoming node to Other.
+Independent fields merge through field patches. Competing updates to the same field follow Convex's serialized commit order; the previous version is retained in history. A stale edit cannot revive a tombstone. Its attempted value is retained in server history for investigation. Subtree deletion tombstones the known descendants. A later child addition to a deleted folder is placed in Other. A concurrent move that would produce a cycle also moves the incoming node to Other.
 
 Order is represented by numeric sibling positions, with ID tie-breaking. Destination projections compress positions for unsupported separators while retaining those separators in canonical state. This is a deterministic v0 ordering strategy, not a fractional-position CRDT; simultaneous complex native reorders require more compatibility testing before release.
 
@@ -32,4 +32,6 @@ Default permissions are bookmarks, local storage, alarms, and the configured Con
 
 The configured local Convex backend is ready to run. A cloud deployment must be created separately and its URL supplied in `.env.local`, followed by a rebuild. No production cloud resource was created by this implementation.
 
-Public release still needs account deletion, request-abuse controls, retention limits and pruning, larger collection storage, signed packages, and the full browser/platform matrix. Server backups currently support investigation; only per-change restore and JSON export are exposed in the UI.
+Public release still needs account deletion, request-abuse controls, retention limits and pruning, larger collection storage, signed packages, and the full browser/platform matrix. Server backups and operation history currently support investigation; only JSON export is exposed in the UI.
+
+Activity is a short, non-diagnostic feed limited to four lines: `<title> added`, `<title> removed`, `<title> moved` and `<browser> synced`, each with a relative timestamp. Only structural changes to bookmarks and folders appear: creates, deletes of live items and moves to a different folder. Title/URL edits, reorders within a folder, stale edits to deleted items and separators are omitted. Each browser contributes one `synced` line, updated when a checkpoint applies new revisions; idle polling does not refresh it.
