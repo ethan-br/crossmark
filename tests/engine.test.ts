@@ -6,7 +6,6 @@ import { Adapter } from '../apps/extension/src/adapter';
 import { MemoryBookmarks } from './fixtures/bookmarks';
 import { initialState, type State, type Store } from '../apps/extension/src/state';
 import type { ConvexHttpClient } from 'convex/browser';
-import { getFunctionName } from 'convex/server';
 async function setup() {
   const { t, auth } = await authenticatedBackend();
   function device(name: string, browser = 'Chromium') {
@@ -61,76 +60,54 @@ describe('two-browser synchronization and recovery', () => {
     ['Firefox', 'Chrome'],
     ['Helium', 'Firefox'],
     ['Firefox', 'Helium'],
-  ])('reconciles %s into %s without changing existing cloud bookmarks', async (first, second) => {
+  ])('replaces %s local bookmarks with the cloud tree in %s', async (first, second) => {
     const { device } = await setup();
     const a = device('First', first),
       b = device('Second', second);
     const aRoot = first === 'Firefox' ? 'toolbar_____' : '1';
     const bRoot = second === 'Firefox' ? 'toolbar_____' : '1';
-    const cloudFolder = await a.native.create({ parentId: aRoot, title: 'Work' });
-    await a.native.create({
-      parentId: cloudFolder.id,
-      title: 'Cloud title',
-      url: 'https://shared.example',
-    });
+    const bOther = second === 'Firefox' ? 'unfiled_____' : '2';
+    const folder = await a.native.create({ parentId: aRoot, title: 'Cloud folder' });
+    await a.native.create({ parentId: folder.id, title: 'Cloud', url: 'https://cloud.example' });
     await a.engine.command({ type: 'connect', name: 'First' });
-    const original = (await a.store.read()).snapshot!.nodes;
-    const reused = await b.native.create({
-      parentId: bRoot,
-      title: 'Local title',
-      url: 'https://shared.example',
-    });
-    const localFolder = await b.native.create({ parentId: bRoot, title: 'Work' });
+    const original = (await a.store.read()).snapshot!;
+    const localFolder = await b.native.create({ parentId: bRoot, title: 'Local folder' });
     await b.native.create({
       parentId: localFolder.id,
-      title: 'Extra copy',
-      url: 'https://shared.example',
+      title: 'Local',
+      url: 'https://local.example',
     });
-    await b.native.create({ parentId: localFolder.id, title: 'New', url: 'https://new.example' });
-    await b.native.create({ parentId: bRoot, title: 'New duplicate', url: 'https://new.example' });
+    await b.native.create({ parentId: bOther, title: 'Other', url: 'https://other.example' });
+    if (second === 'Firefox')
+      await b.native.create({
+        parentId: 'menu________',
+        title: 'Menu local',
+        url: 'https://menu-local.example',
+      });
+    const managed = { id: 'managed-root', title: 'Managed', folderType: 'managed' };
+    b.native.nodes.push(managed);
+    const managedItem = await b.native.create({
+      parentId: managed.id,
+      title: 'Policy',
+      url: 'https://policy.example',
+    });
     await b.engine.command({ type: 'connect', name: 'Second' });
-    expect((await b.store.read()).status).toBe('review');
-    await b.engine.command({ type: 'approve' });
     const joined = await ready(b);
-    await ready(a);
-    expect(joined.snapshot!.nodes).toHaveLength(3);
-    for (const n of original) expect(joined.snapshot!.nodes).toContainEqual(n);
-    for (const d of [a, b]) {
-      expect(d.native.nodes.filter((n) => n.url)).toHaveLength(2);
-      const shared = d.native.nodes.find((n) => n.url === 'https://shared.example')!;
-      expect(shared.title).toBe('Cloud title');
-      expect(d.native.nodes.find((n) => n.id === shared.parentId)?.title).toBe('Work');
-    }
-    expect(b.native.nodes.find((n) => n.url === 'https://shared.example')?.id).toBe(reused.id);
-    const revision = joined.snapshot!.revision;
-    await b.engine.command({ type: 'approve' });
-    await b.engine.command({ type: 'connect', name: 'Second' });
-    await b.engine.command({ type: 'disconnect' });
-    await b.engine.command({ type: 'connect', name: 'Second' });
-    await b.engine.command({ type: 'approve' });
-    expect((await ready(b)).snapshot!.revision).toBe(revision);
-    expect((await ready(a)).snapshot!.nodes).toEqual(joined.snapshot!.nodes);
+    expect(joined.status).toBe('ready');
+    expect(joined.snapshot!.nodes).toEqual(original.nodes);
+    expect(joined.snapshot!.revision).toBe(original.revision);
+    expect(
+      b.native.nodes
+        .filter((n) => n.url)
+        .map((n) => n.url)
+        .sort(),
+    ).toEqual(['https://cloud.example', 'https://policy.example']);
+    expect(b.native.nodes.find((n) => n.id === managedItem.id)).toBeDefined();
+    expect(b.native.nodes.find((n) => n.title === 'Local folder')).toBeUndefined();
+    expect((await ready(a)).snapshot!.nodes).toEqual(original.nodes);
   });
 
-  it('uses the latest cloud state when two browsers approve overlapping new URLs', async () => {
-    const { device } = await setup();
-    const a = device('A'),
-      b = device('B'),
-      c = device('C');
-    await a.engine.command({ type: 'connect', name: 'A' });
-    for (const d of [b, c]) {
-      await d.native.create({ parentId: '1', title: 'Shared new URL', url: 'https://new.example' });
-      await d.engine.command({ type: 'connect', name: 'Joining' });
-    }
-    await b.engine.command({ type: 'approve' });
-    await c.engine.command({ type: 'approve' });
-    for (const d of [a, b, c]) {
-      expect((await ready(d)).snapshot!.nodes).toHaveLength(1);
-      expect(d.native.nodes.filter((n) => n.url)).toHaveLength(1);
-    }
-  });
-
-  it('preserves cloud duplicates, menu roots and separators through a Chromium reconnect', async () => {
+  it('removes every local duplicate and retains cloud duplicates and Firefox menu bookmarks', async () => {
     const { device } = await setup();
     const a = device('Firefox', 'Firefox'),
       b = device('Chrome', 'Chrome');
@@ -143,91 +120,20 @@ describe('two-browser synchronization and recovery', () => {
       });
     await a.engine.command({ type: 'connect', name: 'Firefox' });
     for (let i = 0; i < 3; i++)
-      await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://same.example' });
+      await b.native.create({ parentId: '1', title: `Local ${i}`, url: 'https://same.example' });
     const original = (await a.store.read()).snapshot!;
     await b.engine.command({ type: 'connect', name: 'Chrome' });
-    await b.engine.command({ type: 'approve' });
     expect((await ready(b)).snapshot!.nodes).toEqual(original.nodes);
     expect(b.native.nodes.filter((n) => n.url)).toHaveLength(2);
     expect(b.native.nodes.filter((n) => n.type === 'separator')).toHaveLength(0);
-    await b.engine.command({ type: 'disconnect' });
-    await b.engine.command({ type: 'connect', name: 'Chrome' });
-    await b.engine.command({ type: 'approve' });
-    expect((await ready(b)).snapshot!.nodes).toEqual(original.nodes);
     expect(b.native.nodes.filter((n) => n.title === 'Bookmarks Menu')).toHaveLength(1);
-    expect((await ready(a)).snapshot!.revision).toBe(original.revision);
   });
 
-  it('merges duplicate local folders and moves their new children before deleting surplus folders', async () => {
-    const { a, device } = await connectPair();
-    const b = device('Joining');
-    for (let i = 0; i < 2; i++) {
-      const folder = await b.native.create({ parentId: '1', title: 'Work' });
-      await b.native.create({
-        parentId: folder.id,
-        title: `New ${i}`,
-        url: `https://new.example/${i}`,
-      });
-    }
-    await b.engine.command({ type: 'connect', name: 'Joining' });
-    await b.engine.command({ type: 'approve' });
-    expect((await ready(b)).snapshot!.nodes).toHaveLength(4);
-    await ready(a);
-    for (const d of [a, b]) {
-      const folders = d.native.nodes.filter((n) => n.title === 'Work');
-      expect(folders).toHaveLength(1);
-      expect(d.native.nodes.filter((n) => n.parentId === folders[0].id)).toHaveLength(2);
-    }
-  });
-
-  it('recovers a lost join response across restart and captures subsequent native edits', async () => {
-    const { a, device } = await connectPair();
-    const b = device('Joining');
-    const native = await b.native.create({
-      parentId: '1',
-      title: 'New',
-      url: 'https://new.example',
-    });
-    await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://one.example' });
-    await b.engine.command({ type: 'connect', name: 'Joining' });
-    const normal = b.transport.mutation;
-    let fail = true;
-    b.transport.mutation = (async (...args: Parameters<typeof normal>) => {
-      const result = await normal(args[0], args[1]);
-      if (fail && getFunctionName(args[0]) === 'sync:join') {
-        fail = false;
-        throw new TypeError('Join response lost');
-      }
-      return result;
-    }) as typeof normal;
-    await b.engine.command({ type: 'approve' });
-    expect((await b.store.read()).joinLocal).toHaveLength(2);
-    await b.native.update(native.id, { title: 'Edited during retry' });
-    const restarted = new Engine(
-      b.store,
-      b.adapter,
-      'http://127.0.0.1:3210',
-      undefined,
-      b.transport,
-      b.auth,
-    );
-    await restarted.command({ type: 'sync' });
-    const state = await ready(b);
-    expect(state.joinLocal).toBeUndefined();
-    expect(state.snapshot!.nodes).toHaveLength(2);
-    await ready(a);
-    expect(a.native.nodes.find((n) => n.url === 'https://new.example')?.title).toBe(
-      'Edited during retry',
-    );
-    expect(state.snapshot!.activity.filter((n) => n.kind === 'create')).toHaveLength(1);
-  });
-
-  it('recovers a native duplicate removal whose storage acknowledgement was lost', async () => {
+  it('recovers an interrupted native deletion while installing the collection', async () => {
     const { a, device } = await connectPair();
     const b = device('Joining');
     for (let i = 0; i < 2; i++)
-      await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://one.example' });
-    await b.engine.command({ type: 'connect', name: 'Joining' });
+      await b.native.create({ parentId: '1', title: 'Local', url: `https://local.example/${i}` });
     const remove = b.native.remove.bind(b.native);
     let fail = true;
     b.native.remove = async (id) => {
@@ -237,33 +143,53 @@ describe('two-browser synchronization and recovery', () => {
         throw new Error('Interrupted removal');
       }
     };
-    await b.engine.command({ type: 'approve' });
+    await b.engine.command({ type: 'connect', name: 'Joining' });
     expect((await b.store.read()).journal?.kind).toBe('delete');
-    await b.engine.command({ type: 'sync' });
-    expect((await ready(b)).joinAliases).toBeUndefined();
-    expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
+    const restarted = new Engine(
+      b.store,
+      b.adapter,
+      'http://127.0.0.1:3210',
+      undefined,
+      b.transport,
+      b.auth,
+    );
+    await restarted.command({ type: 'sync' });
+    expect((await b.store.read()).error).toBeUndefined();
+    expect((await b.store.read()).status).toBe('ready');
+    expect(b.native.nodes.filter((n) => n.url).map((n) => n.url)).toEqual(['https://one.example']);
     expect((await ready(a)).snapshot!.nodes).toHaveLength(1);
   });
 
-  it('preserves a new URL edited into a surplus copy while joining is interrupted', async () => {
+  it('adopts an interrupted cloud create without wiping it on join retry', async () => {
     const { a, device } = await connectPair();
     const b = device('Joining');
-    for (let i = 0; i < 2; i++)
-      await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://one.example' });
+    await b.native.create({ parentId: '1', title: 'Local', url: 'https://local.example' });
+    const create = b.native.create.bind(b.native);
+    let fail = true;
+    b.native.create = async (details) => {
+      const result = await create(details);
+      if (fail) {
+        fail = false;
+        throw new Error('Interrupted creation');
+      }
+      return result;
+    };
     await b.engine.command({ type: 'connect', name: 'Joining' });
-    const query = vi
-      .spyOn(b.transport, 'query')
-      .mockRejectedValueOnce(new TypeError('Network offline'));
-    await b.engine.command({ type: 'approve' });
-    query.mockRestore();
-    const state = await b.store.read();
-    const surplus = Object.keys(state.joinAliases!)[0];
-    expect(surplus).toBeDefined();
-    await b.native.update(state.mappings[surplus], { url: 'https://edited.example' });
-    await b.engine.command({ type: 'sync' });
-    expect((await ready(b)).snapshot!.nodes).toHaveLength(2);
-    await ready(a);
-    expect(a.native.nodes.filter((n) => n.url === 'https://edited.example')).toHaveLength(1);
+    expect((await b.store.read()).journal?.kind).toBe('create');
+    const created = b.native.nodes.find((n) => n.url === 'https://one.example')!;
+    const restarted = new Engine(
+      b.store,
+      b.adapter,
+      'http://127.0.0.1:3210',
+      undefined,
+      b.transport,
+      b.auth,
+    );
+    await restarted.command({ type: 'sync' });
+    expect((await b.store.read()).error).toBeUndefined();
+    expect(b.native.nodes.filter((n) => n.url).map((n) => n.url)).toEqual(['https://one.example']);
+    expect(b.native.nodes.find((n) => n.url === created.url)?.id).toBe(created.id);
+    expect((await ready(a)).snapshot!.nodes).toHaveLength(1);
   });
 
   it('seeds once and a new empty browser receives the collection', async () => {
@@ -299,22 +225,81 @@ describe('two-browser synchronization and recovery', () => {
     await ready(b);
     expect((await a.store.read()).snapshot!.revision).toBe(revision);
   });
-  it('requires explicit review to merge a nonempty joining browser', async () => {
-    const { device } = await setup();
-    const a = device('A'),
-      b = device('B');
-    await a.native.create({ parentId: '1', title: 'A', url: 'https://same.example' });
-    await b.native.create({ parentId: '1', title: 'B', url: 'https://same.example' });
-    await a.engine.command({ type: 'connect', name: 'A' });
-    await b.engine.command({ type: 'connect', name: 'B' });
-    expect((await b.store.read()).status).toBe('review');
-    expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
-    await b.engine.command({ type: 'approve' });
+  it('performs no native writes for an identical tree and preserves native IDs for unchanged bookmarks', async () => {
+    const { a, b } = await connectPair();
+    const untouched = b.native.nodes.find((n) => n.url === 'https://one.example')!;
+    const create = vi.spyOn(b.native, 'create');
+    const update = vi.spyOn(b.native, 'update');
+    const move = vi.spyOn(b.native, 'move');
+    const remove = vi.spyOn(b.native, 'remove');
+    await ready(b);
+    expect(create).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(move).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    await a.native.create({ parentId: '1', title: 'Added', url: 'https://added.example' });
     await ready(a);
     await ready(b);
-    expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
-    expect(a.native.nodes.filter((n) => n.url)).toHaveLength(1);
-    expect(b.native.nodes.find((n) => n.url)?.title).toBe('A');
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(b.native.nodes.find((n) => n.url === untouched.url)?.id).toBe(untouched.id);
+    create.mockClear();
+    const added = a.native.nodes.find((n) => n.url === 'https://added.example')!;
+    await a.native.update(added.id, { title: 'Renamed' });
+    await ready(a);
+    await ready(b);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0][0]).toBe(b.native.nodes.find((n) => n.url === added.url)?.id);
+    expect(create).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(b.native.nodes.find((n) => n.url === untouched.url)?.id).toBe(untouched.id);
+    const addedNativeId = b.native.nodes.find((n) => n.url === added.url)!.id;
+    move.mockClear();
+    await a.native.move(added.id, { parentId: '2', index: 0 });
+    await ready(a);
+    await ready(b);
+    expect(move.mock.calls.map(([id]) => id)).toEqual([addedNativeId]);
+    expect(b.native.nodes.find((n) => n.url === untouched.url)?.id).toBe(untouched.id);
+    remove.mockClear();
+    await a.native.remove(added.id);
+    await ready(a);
+    await ready(b);
+    expect(remove.mock.calls.map(([id]) => id)).toEqual([addedNativeId]);
+    expect(b.native.nodes.find((n) => n.url === untouched.url)?.id).toBe(untouched.id);
+  });
+  it('resumes pending uploads and remote pulls after restart while honoring Pause', async () => {
+    const { a, b } = await connectPair();
+    await a.engine.command({ type: 'pause' });
+    await a.native.create({ parentId: '1', title: 'Queued', url: 'https://queued.example' });
+    await a.engine.sync();
+    expect((await a.store.read()).outbox).toHaveLength(1);
+    const restarted = new Engine(
+      a.store,
+      a.adapter,
+      'http://127.0.0.1:3210',
+      undefined,
+      a.transport,
+      a.auth,
+    );
+    await restarted.sync();
+    expect((await a.store.read()).outbox).toHaveLength(1);
+    expect((await ready(b)).snapshot!.nodes).toHaveLength(1);
+    await restarted.command({ type: 'pause' });
+    await ready(b);
+    expect(b.native.nodes.filter((n) => n.url)).toHaveLength(2);
+    await b.native.create({ parentId: '1', title: 'Remote', url: 'https://remote.example' });
+    await ready(b);
+    const again = new Engine(
+      a.store,
+      a.adapter,
+      'http://127.0.0.1:3210',
+      undefined,
+      a.transport,
+      a.auth,
+    );
+    await again.sync();
+    expect(a.native.nodes.filter((n) => n.url)).toHaveLength(3);
   });
   it('retains paused changes durably and resumes them', async () => {
     const { a, b } = await connectPair();
@@ -389,18 +374,6 @@ describe('two-browser synchronization and recovery', () => {
 });
 
 describe('safety and partial failure regressions', () => {
-  it('cannot bypass a joining merge review by pausing and resuming', async () => {
-    const { device } = await setup();
-    const a = device('A'),
-      b = device('B');
-    await a.engine.command({ type: 'connect', name: 'A' });
-    await b.native.create({ parentId: '1', title: 'Local only', url: 'https://local.example' });
-    await b.engine.command({ type: 'connect', name: 'B' });
-    await b.engine.command({ type: 'pause' });
-    await b.engine.command({ type: 'pause' });
-    expect((await b.store.read()).status).toBe('review');
-    expect((await ready(a)).snapshot?.nodes).toHaveLength(0);
-  });
   it('requires review for mass deletion and keeps a recovery snapshot', async () => {
     const { device } = await setup();
     const a = device('A');

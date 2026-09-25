@@ -27,7 +27,7 @@ import {
   LoaderCircle,
   LogOut,
 } from 'lucide-react';
-import { type Activity, count, alive } from '../../../packages/model';
+import { type Activity, count } from '../../../packages/model';
 import { type State, initialState } from './state';
 import type { Command } from './engine';
 import packageJson from '../../../package.json';
@@ -173,7 +173,7 @@ function App() {
     },
     review: {
       icon: FolderInput,
-      title: state.joining ? 'Review bookmark merge' : 'Review pending changes',
+      title: 'Review pending changes',
       description: `${state.reviewCount ?? pending} items require approval.`,
       connection: 'Review required',
     },
@@ -372,13 +372,9 @@ function App() {
                   </div>
                   {status === 'review' ? (
                     <div className="cm-permission">
-                      <div className="cm-item-title">
-                        {state.joining ? 'Merge collections' : 'Approve changes'}
-                      </div>
+                      <div className="cm-item-title">Approve changes</div>
                       <p>
-                        {state.joining
-                          ? `${state.reviewCount} local items will be added to ${alive(state.snapshot?.nodes ?? []).length} saved items. Existing bookmarks are preserved, including duplicates.`
-                          : `${pending} pending operations will update your other browsers. Export includes the operations and the previous snapshot.`}
+                        {`${pending} pending operations will update your other browsers. Export includes the operations and the previous snapshot.`}
                       </p>
                       <p>A recovery snapshot is saved before applying changes.</p>
                       <div className="cm-actions">
@@ -392,7 +388,7 @@ function App() {
                           onClick={() => act({ type: 'approve' })}
                         >
                           <Check />
-                          {state.joining ? 'Merge collections' : 'Approve'}
+                          Approve
                         </button>
                       </div>
                     </div>
@@ -559,8 +555,9 @@ function App() {
                     <ChevronRight />
                   </button>
                   <p className="cm-fineprint">
-                    v{packageJson.version} · Native changes trigger sync. Remote changes are checked every 30
-                    seconds while the browser is running. Bookmark data is not end-to-end encrypted.
+                    v{packageJson.version} · Native changes trigger sync. Remote changes are checked
+                    every 30 seconds while the browser is running. Bookmark data is not end-to-end
+                    encrypted.
                   </p>
                 </section>
               )}

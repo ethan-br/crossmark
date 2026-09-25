@@ -39,16 +39,16 @@ describe('Convex authorization and durable operations', () => {
     await expect(unauthenticated.query(api.sync.snapshot, { deviceId })).rejects.toThrow(
       'Unauthenticated',
     );
-    await expect(unauthenticated.mutation(api.sync.join, { deviceId, nodes: [] })).rejects.toThrow(
-      'Unauthenticated',
-    );
+    await expect(
+      unauthenticated.mutation(api.sync.push, { deviceId, operations: [] }),
+    ).rejects.toThrow('Unauthenticated');
     const expired = await account('expired@example.com', Date.now() - 1000);
     await expect(expired.t.query(api.sync.snapshot, { deviceId })).rejects.toThrow(
       'Unauthenticated',
     );
     await t.mutation(api.sync.revoke, { deviceId, targetDeviceId: deviceId });
     await expect(t.query(api.sync.snapshot, { deviceId })).rejects.toThrow('disconnected');
-    await expect(t.mutation(api.sync.join, { deviceId, nodes: [] })).rejects.toThrow(
+    await expect(t.mutation(api.sync.push, { deviceId, operations: [] })).rejects.toThrow(
       'disconnected',
     );
   });
@@ -68,9 +68,6 @@ describe('Convex authorization and durable operations', () => {
       t.mutation(api.sync.push, { deviceId: second.deviceId, operations: [] }),
     ).rejects.toThrow('disconnected');
     await expect(
-      t.mutation(api.sync.join, { deviceId: second.deviceId, nodes: [] }),
-    ).rejects.toThrow('disconnected');
-    await expect(
       t.mutation(api.sync.revoke, { deviceId, targetDeviceId: second.deviceId }),
     ).rejects.toThrow('not found');
     expect((await other.t.query(api.sync.snapshot, { deviceId: second.deviceId })).nodes).toEqual(
@@ -83,10 +80,12 @@ describe('Convex authorization and durable operations', () => {
       installationId: crypto.randomUUID(),
       name: 'Second',
       browser: 'Firefox',
-      nodes: [],
+      nodes: [{ ...node, id: 'local-only', url: 'https://local.example' }],
     });
     expect(second.joining).toBe(true);
-    expect((await t.query(api.sync.snapshot, { deviceId: second.deviceId })).nodes).toHaveLength(1);
+    expect((await t.query(api.sync.snapshot, { deviceId: second.deviceId })).nodes).toEqual([
+      { ...node, revision: 1, deleted: false },
+    ]);
   });
   it('deduplicates repeated upload after lost acknowledgment', async () => {
     const { t, deviceId } = await setup();

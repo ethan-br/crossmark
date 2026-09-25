@@ -114,10 +114,6 @@ export class Engine {
         state.status = 'syncing';
         state.joining = result.joining;
         state.initialized = !result.joining;
-        if (state.joining && local.length) {
-          state.status = 'review';
-          state.reviewCount = local.length;
-        }
         await this.save(state);
         state.snapshot = (await this.client.query(api.sync.snapshot, {
           deviceId: state.deviceId as Id<'devices'>,
@@ -172,7 +168,7 @@ export class Engine {
         await this.client.mutation(api.sync.backup, {
           deviceId: state.deviceId as Id<'devices'>,
           nodes: state.backup ?? state.baseline,
-          reason: state.joining ? 'Before joining browser merge' : 'Before large local change',
+          reason: 'Before large local change',
         });
         state.safetyApproved = true;
         state.status = 'ready';
@@ -226,28 +222,7 @@ export class Engine {
   }
   private async capture(state: State) {
     const local = await this.adapter.read(state);
-    // Surplus join copies stay in the native baseline until journaled deletion.
-    // They must never become cloud creates/updates/deletes during recovery.
-    const aliases = state.joinAliases ?? {};
-    const ignoredBefore = new Set(Object.keys(aliases));
-    for (const n of local)
-      if (aliases[n.id] && n.kind === 'bookmark') {
-        const previous = state.baseline.find((old) => old.id === n.id);
-        // A user may turn a surplus copy into a new bookmark while projection
-        // is interrupted. Import that edit instead of discarding it with the copy.
-        if (previous && previous.url !== n.url) delete aliases[n.id];
-      }
-    const ops = diff(
-      state.baseline.filter((n) => !ignoredBefore.has(n.id)),
-      local.filter((n) => !aliases[n.id]),
-      state.sequence,
-    );
-    for (const op of ops) {
-      if (op.node)
-        op.node = { ...op.node, parentId: aliases[op.node.parentId] ?? op.node.parentId };
-      if (op.fields?.parentId)
-        op.fields.parentId = aliases[op.fields.parentId] ?? op.fields.parentId;
-    }
+    const ops = diff(state.baseline, local, state.sequence);
     debug.event('sync.capture', 'success', { count: ops.length });
     if (ops.length) {
       if (ops.length > 50 || ops.filter((o) => o.kind === 'delete').length > 20) {
@@ -272,49 +247,12 @@ export class Engine {
     debug.event('sync.exchange', 'start');
     try {
       await this.adapter.recover(state, this.store);
+      // A joining browser installs the collection. Its preexisting bookmarks
+      // are only a local recovery snapshot, never an upload to the collection.
       if (state.joining) {
-        const local = state.joinLocal ?? (await this.adapter.read(state));
-        if (local.length && !state.safetyApproved) {
-          state.status = 'review';
-          state.reviewCount = local.length;
-          debug.event('sync.exchange', 'review');
-          await this.save(state);
-          return;
-        }
-        if (state.paused) return;
-        await this.authorize();
-        state.joinLocal = local;
-        await this.save(state);
-        const matches = await this.client.mutation(api.sync.join, {
-          deviceId: state.deviceId as Id<'devices'>,
-          nodes: local,
-        });
-        const adopted = new Map<string, string>();
-        const used = new Set<string>();
-        state.joinAliases = {};
-        const mappings = { ...state.mappings };
-        for (const { localId, nodeId } of matches) {
-          if (used.has(nodeId)) {
-            state.joinAliases[localId] = nodeId;
-            continue;
-          }
-          used.add(nodeId);
-          adopted.set(localId, nodeId);
-          delete mappings[localId];
-          mappings[nodeId] = state.mappings[localId];
-        }
-        state.mappings = mappings;
-        state.baseline = local.map((n) => ({
-          ...n,
-          id: adopted.get(n.id) ?? n.id,
-          parentId: adopted.get(n.parentId) ?? n.parentId,
-        }));
-        delete state.joinLocal;
-        state.joining = false;
-        state.initialized = true;
-        await this.save(state);
-      }
-      await this.capture(state);
+        delete state.reviewCount; // Clear review state from an interrupted older join.
+        state.safetyApproved = false;
+      } else await this.capture(state);
       if (state.paused) {
         debug.event('sync.exchange', 'paused');
         state.status = 'paused';
@@ -356,11 +294,15 @@ export class Engine {
         const settled = await this.project(state, remote.nodes);
         debug.event('sync.project', settled ? 'success' : 'local-change', { attempt: passes + 1 });
         if (!settled) {
-          await this.capture(state);
+          if (!state.joining) await this.capture(state);
           if ((state as State).status === 'review' && !state.safetyApproved) return;
           continue;
         }
         state.cursor = remote.revision;
+        state.joining = false;
+        state.initialized = true;
+        delete state.joinLocal;
+        delete state.joinAliases;
         await this.client.mutation(api.sync.checkpoint, {
           deviceId: state.deviceId as Id<'devices'>,
           cursor: state.cursor,
@@ -371,7 +313,6 @@ export class Engine {
         state.status = 'ready';
         state.failures = 0;
         state.safetyApproved = false;
-        delete state.joinAliases;
         delete state.reviewCount;
         delete state.error;
         state.needsSignIn = false;
@@ -425,7 +366,14 @@ export class Engine {
     const target = new Map(visible.map((n) => [n.id, n]));
     const check = async () => {
       const current = await this.adapter.read(state);
-      return diff(state.baseline, current, state.sequence).length === 0;
+      if (diff(state.baseline, current, state.sequence).length === 0) return true;
+      if (state.joining) {
+        // A concurrent native edit during installation stays local and is
+        // included in the next journaled pass, never sent as a cloud change.
+        state.baseline = current;
+        await this.save(state);
+      }
+      return false;
     };
     for (const n of visible) {
       if (!(await check())) return false;

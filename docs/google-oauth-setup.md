@@ -83,7 +83,7 @@ npx convex run auth:configuration
 
 The query should return `googleConfigured: true`. This confirms both environment values exist, not that Google accepts them. Reload the extension in each browser, open it, enter a browser name, and click **Sign in with Google**. Complete Google's consent screen. Browser identity APIs return the result to the background even if the popup closes; reopen it to see sync status.
 
-Sign in with the same account in the second browser and approve its merge if it has bookmarks. Follow [the manual test checklist](test-plan.md). Live OAuth consent, callback completion, session refresh and cross-browser sync with real Google sessions remain unverified until these credentials are configured.
+Sign in with the same account in the second browser and verify that its local bookmarks are replaced with the collection. Follow [the manual test checklist](test-plan.md). Live OAuth consent, callback completion, session refresh and cross-browser sync with real Google sessions remain unverified until these credentials are configured.
 
 ## Troubleshooting
 

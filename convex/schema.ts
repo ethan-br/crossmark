@@ -49,6 +49,7 @@ export default defineSchema({
     cursor: v.number(),
     sequence: v.number(),
     revoked: v.boolean(),
+    // Existing devices may carry a completed join result from older releases.
     joinMatches: v.optional(v.array(v.object({ localId: v.string(), nodeId: v.string() }))),
   })
     .index('by_installation', ['ownerId', 'installationId'])
