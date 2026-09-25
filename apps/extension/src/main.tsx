@@ -63,6 +63,10 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [create, setCreate] = useState(false);
+  const [reauth, setReauth] = useState(false);
   const [confirm, setConfirm] = useState<{
     title: string;
     body: string;
@@ -116,9 +120,18 @@ function App() {
       setBusy(false);
     }
   }
-  async function login(e?: FormEvent) {
-    e?.preventDefault();
-    await act({ type: 'connect', name: name || state.name });
+  async function login(e: FormEvent) {
+    e.preventDefault();
+    const signingUp = create && !state.connected;
+    const ok = await act({
+      type: 'connect',
+      name: name || state.name,
+      credentials: { email: email || state.account?.email || '', password, create: signingUp },
+    });
+    if (ok) {
+      setPassword('');
+      setReauth(false);
+    }
   }
   async function exportData() {
     try {
@@ -180,7 +193,7 @@ function App() {
     setup: {
       icon: KeyRound,
       title: 'Not signed in',
-      description: 'Sign in with Google to sync bookmarks.',
+      description: 'Sign in to sync bookmarks.',
       connection: 'Not signed in',
     },
   }[status];
@@ -305,43 +318,94 @@ function App() {
               <LoaderCircle className="spin" />
               Loading sync status
             </div>
-          ) : !state.connected ? (
-            <section className="cm-content" aria-label="Google sign-in">
-              <h2 className="cm-panel-title">Sign in</h2>
-              <p className="cm-intro">Use the same Google account in each browser.</p>
+          ) : !state.connected || reauth ? (
+            <section className="cm-content" aria-label="Sign in">
+              <h2 className="cm-panel-title">
+                {create && !state.connected ? 'Create account' : 'Sign in'}
+              </h2>
+              <p className="cm-intro">Use the same account in each browser.</p>
               <form onSubmit={login}>
-                <label className="cm-label" htmlFor="browser-name">
-                  Browser name
+                <label className="cm-label" htmlFor="email">
+                  Email
                 </label>
                 <input
                   className="cm-input"
-                  id="browser-name"
-                  placeholder={state.name}
-                  value={name}
-                  maxLength={80}
-                  onChange={(e) => setName(e.target.value)}
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required={!state.account}
+                  placeholder={state.account?.email}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
-                <div className="cm-source">
-                  <FolderInput />
-                  <span>
-                    {stats.bookmarks} bookmarks · {stats.folders} folders in this browser
-                  </span>
-                </div>
-                <p className="cm-secondary cm-source-note">
-                  Your first installation initializes the collection. Additional browsers require
-                  approval before merging existing bookmarks.
-                </p>
+                <label className="cm-label" htmlFor="password">
+                  Password
+                </label>
+                <input
+                  className="cm-input"
+                  id="password"
+                  type="password"
+                  autoComplete={create ? 'new-password' : 'current-password'}
+                  required
+                  minLength={create ? 8 : undefined}
+                  maxLength={128}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                {!state.connected && (
+                  <>
+                    <label className="cm-label" htmlFor="browser-name">
+                      Browser name
+                    </label>
+                    <input
+                      className="cm-input"
+                      id="browser-name"
+                      placeholder={state.name}
+                      value={name}
+                      maxLength={80}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                    <div className="cm-source">
+                      <FolderInput />
+                      <span>
+                        {stats.bookmarks} bookmarks · {stats.folders} folders in this browser
+                      </span>
+                    </div>
+                    <p className="cm-secondary cm-source-note">
+                      Your first installation initializes the collection. Additional browsers
+                      require approval before merging existing bookmarks.
+                    </p>
+                  </>
+                )}
                 <div className="cm-actions">
                   <button className="cm-primary" disabled={busy}>
                     {busy ? <LoaderCircle className="spin" /> : <KeyRound />}
-                    {busy ? 'Signing in…' : 'Sign in with Google'}
+                    {busy
+                      ? 'Signing in…'
+                      : create && !state.connected
+                        ? 'Create account'
+                        : 'Sign in'}
                   </button>
+                  {reauth && state.connected && (
+                    <button
+                      type="button"
+                      className="cm-secondary-button"
+                      onClick={() => setReauth(false)}
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
               </form>
-              <p className="cm-fineprint">
-                Google provides your name and email for login. Crossmark’s server can read bookmark
-                data.
-              </p>
+              {!state.connected && (
+                <p className="cm-fineprint">
+                  {create ? 'Already have an account? ' : 'New to Crossmark? '}
+                  <button type="button" className="cm-link" onClick={() => setCreate(!create)}>
+                    {create ? 'Sign in' : 'Create an account'}
+                  </button>
+                  . Crossmark’s server can read bookmark data.
+                </p>
+              )}
             </section>
           ) : (
             <>
@@ -414,7 +478,9 @@ function App() {
                         <button
                           className="cm-primary"
                           disabled={busy || status === 'syncing'}
-                          onClick={() => (state.needsSignIn ? login() : act({ type: 'sync' }))}
+                          onClick={() =>
+                            state.needsSignIn ? setReauth(true) : act({ type: 'sync' })
+                          }
                         >
                           {state.needsSignIn ? (
                             <KeyRound />
@@ -422,7 +488,7 @@ function App() {
                             <RefreshCw className={status === 'syncing' ? 'spin' : ''} />
                           )}
                           {state.needsSignIn
-                            ? 'Sign in with Google'
+                            ? 'Sign in'
                             : status === 'syncing'
                               ? 'Syncing…'
                               : 'Sync now'}
@@ -510,7 +576,7 @@ function App() {
                   <h2 className="cm-panel-title">Settings</h2>
                   <div className="cm-setting">
                     <div className="cm-setting-copy">
-                      <div className="cm-item-title">Google account</div>
+                      <div className="cm-item-title">Account</div>
                       <p className="cm-secondary">{state.account?.email}</p>
                     </div>
                   </div>
@@ -545,7 +611,7 @@ function App() {
                     onClick={() =>
                       setConfirm({
                         title: 'Sign out?',
-                        body: 'Sync pending changes before signing out. Native bookmarks remain in this browser. Sign in with the same Google account to reconnect.',
+                        body: 'Sync pending changes before signing out. Native bookmarks remain in this browser. Sign in with the same account to reconnect.',
                         command: { type: 'disconnect' },
                         label: 'Sign out',
                       })
@@ -559,8 +625,9 @@ function App() {
                     <ChevronRight />
                   </button>
                   <p className="cm-fineprint">
-                    v{packageJson.version} · Native changes trigger sync. Remote changes are checked every 30
-                    seconds while the browser is running. Bookmark data is not end-to-end encrypted.
+                    v{packageJson.version} · Native changes trigger sync. Remote changes are checked
+                    every 30 seconds while the browser is running. Bookmark data is not end-to-end
+                    encrypted.
                   </p>
                 </section>
               )}

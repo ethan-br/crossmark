@@ -5,11 +5,11 @@ import type { Id } from '../../../convex/_generated/dataModel';
 import { type Node, type Snapshot, validateTree } from '../../../packages/model';
 import { diff, parentFirst } from '../../../packages/sync-core';
 import { Adapter } from './adapter';
-import type { SessionAuth } from './auth';
+import type { Credentials, SessionAuth } from './auth';
 import { type State, type Store, initialState, publicState } from './state';
 export type Command =
   | { type: 'state' }
-  | { type: 'connect'; name: string }
+  | { type: 'connect'; name: string; credentials: Credentials }
   | { type: 'sync' }
   | { type: 'pause' }
   | { type: 'approve' }
@@ -33,7 +33,7 @@ export class Engine {
     this.client = transport ?? this.httpClient!;
   }
   private async authorize() {
-    if (!this.auth) throw new Error('Sign in with Google to continue.');
+    if (!this.auth) throw new Error('Sign in to continue.');
     const token = await this.auth.token();
     this.httpClient?.setAuth(token);
   }
@@ -75,8 +75,8 @@ export class Engine {
           pending: state.outbox,
         };
       if (command.type === 'connect') {
-        if (!this.auth) throw new Error('Sign in with Google to continue.');
-        const account = await this.auth.signIn();
+        if (!this.auth) throw new Error('Sign in to continue.');
+        const account = await this.auth.signIn(command.credentials);
         if (state.account && state.account.id !== account.id) {
           await this.auth.signOut();
           state.needsSignIn = true;
@@ -126,8 +126,7 @@ export class Engine {
         await this.exchange();
         return publicState(await this.store.read());
       }
-      if (!state.deviceId || !state.connected)
-        throw new Error('Sign in with Google to connect this browser.');
+      if (!state.deviceId || !state.connected) throw new Error('Sign in to connect this browser.');
       if (['revoke', 'approve', 'restore'].includes(command.type)) await this.authorize();
       if (command.type === 'revoke') {
         await this.client.mutation(api.sync.revoke, {
@@ -152,7 +151,7 @@ export class Engine {
         } catch (error) {
           // A remotely revoked installation can still clear its local connection.
           if (
-            !/This browser is disconnected|Unauthenticated|Sign in with Google/.test(String(error))
+            !/This browser is disconnected|Unauthenticated|Sign in to continue/.test(String(error))
           )
             throw error;
         }
@@ -396,7 +395,7 @@ export class Engine {
         error instanceof TypeError || /fetch|network|connection|offline/i.test(String(error))
           ? 'offline'
           : 'error';
-      state.needsSignIn = /Unauthenticated|Sign in with Google/i.test(String(error));
+      state.needsSignIn = /Unauthenticated|Sign in to continue/i.test(String(error));
       state.error =
         error instanceof Error
           ? error.message

@@ -1,6 +1,6 @@
 # Crossmark v0
 
-Native desktop bookmark synchronization through Convex, with a WXT-based Chromium/Firefox extension and Google login through Convex Better Auth. Sync runs in the extension background.
+Native desktop bookmark synchronization through Convex, with a WXT-based Chromium/Firefox extension and email/password login through Convex Better Auth. Sync runs in the extension background.
 
 ## Build and install
 
@@ -40,7 +40,7 @@ npm run sign:firefox
 
 The signed XPI is written under `dist/signed/` and copied to `dist/crossmark-firefox-signed.xpi`. `web-ext sign` submits the package to Mozilla's Add-ons signing service; the signature cannot be generated entirely offline. Keep both variables out of Git and out of the browser extension.
 
-For use on a remote computer, configure a Convex cloud deployment and rebuild with its public HTTPS endpoints; see [Google OAuth setup](docs/google-oauth-setup.md).
+For use on a remote computer, configure a Convex cloud deployment and rebuild with its public HTTPS endpoints; see [login setup](docs/auth-setup.md).
 
 ## Local development
 
@@ -55,18 +55,18 @@ WXT opens the extension in a disposable browser profile and reloads it as files 
 
 `npm run dev` opens Google Chrome when it is installed at the usual macOS, Linux, or Windows path; `npm run dev:firefox` opens Firefox the same way. Override with `CHROME_BINARY` / `CHROMIUM_BINARY` or `FIREFOX_BINARY`. Set `WXT_OPEN_BROWSER=0` to build the dev extension without launching a window. Personal persistent profiles belong in an ignored `web-ext.config.ts`; see [the WXT migration guide](docs/wxt-migration.md). `npm install` generates ignored WXT types automatically; `npm run typecheck` regenerates them when needed.
 
-## Google OAuth setup
+## Login setup
 
-**A Google OAuth web client has not been created yet.** The extension installs and opens, but Google sign-in requires backend configuration. Follow [the setup guide](docs/google-oauth-setup.md) to create the client, configure Convex secrets and trusted origins, and test the complete login flow. Do not put the Google client secret in a `VITE_` or `WXT_` variable or extension file.
+Login uses an email and password stored by Better Auth in Convex. The backend needs `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` (the extension origins); follow [the setup guide](docs/auth-setup.md). Do not put backend secrets in a `VITE_` or `WXT_` variable or extension file.
 
-Sign in with the same Google account in each browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically. A nonempty joining browser requires explicit merge approval. Joining matches bookmarks by exact URL across all folders, keeps cloud titles and hierarchy, and imports only new URLs; existing cloud duplicates remain intact. See the [matching policy](docs/v0-decisions.md#initialization-and-joining) for folder and URL details. Signing out does not delete native bookmarks or the account's server collection.
+Create an account in the first browser, then sign in with the same email and password in each other browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically. A nonempty joining browser requires explicit merge approval. Joining matches bookmarks by exact URL across all folders, keeps cloud titles and hierarchy, and imports only new URLs; existing cloud duplicates remain intact. See the [matching policy](docs/v0-decisions.md#initialization-and-joining) for folder and URL details. Signing out does not delete native bookmarks or the account's server collection.
 
 Use one Crossmark installation per independently native-synced collection. Connecting installations already exchanging bookmarks through a browser vendor's sync can introduce duplicates.
 
 ## Included
 
 - Chromium and Firefox Manifest V3 builds, native bookmark/folder edits, moves, ordering and deletion.
-- Google-only login, account-scoped collection access and browser revocation.
+- Email/password login, account-scoped collection access and browser revocation.
 - Durable local operations, idempotent uploads, startup reconciliation and native-write recovery journals.
 - First-browser initialization, reviewed merges and large-change approval.
 - Overview, activity, browser status, pause/resume, export and earlier-version restore.
@@ -77,7 +77,7 @@ Collections are capped at 2,000 records including tombstones, 600 KB and 10 conn
 
 ## Verify
 
-Keep the local backend running. Before configuring Google, run:
+Run:
 
 ```sh
 npm run check
@@ -86,9 +86,9 @@ npm run test:browser
 npm run test:firefox
 ```
 
-Headless tests load the actual extension builds in disposable profiles. They verify startup, native bookmark reads, the Google-only login screen, unconfigured-login handling, export and popup reopening. Firefox also checks native menu and separator reads. They do **not** claim live Google login or authenticated browser-to-browser sync. After OAuth setup, follow the [manual login and sync checklist](docs/test-plan.md).
+Headless tests load the actual extension builds in disposable profiles. They verify startup, native bookmark reads, the email/password login screen, failed-login handling, export and popup reopening. Firefox also checks native menu and separator reads. They do **not** claim a successful login or authenticated browser-to-browser sync; follow the [manual login and sync checklist](docs/test-plan.md).
 
-`npm test` also checks the sync engine, adapters, OAuth callback validation, build endpoint validation and account authorization in isolation. These fixtures are test-only and are not included in either extension. On macOS Firefox smoke tests default to `/Applications/Firefox.app/Contents/MacOS/firefox`; override with `FIREFOX_BINARY` if needed. Selenium obtains geckodriver on its first run. Results and screenshots are in `output/verification/`. `npm run test:debug` checks the built Chromium debug controls without a backend; `npm run test:firefox-auth` checks the Firefox identity flow against its local fixture (see [validation](docs/test-plan.md)).
+`npm test` also checks the sync engine, adapters, the real Better Auth sign-up/sign-in routes, build endpoint validation and account authorization in isolation. These fixtures are test-only and are not included in either extension. On macOS Firefox smoke tests default to `/Applications/Firefox.app/Contents/MacOS/firefox`; override with `FIREFOX_BINARY` if needed. Selenium obtains geckodriver on its first run. Results and screenshots are in `output/verification/`. `npm run test:debug` checks the built Chromium debug controls without a backend (see [validation](docs/test-plan.md)).
 
 GitHub Actions runs typecheck, unit tests and both browser smokes on every pull request. Pull requests from this repository also get a Convex preview deployment and unsigned zips baked against that backend. Pushes to `main` never upload an unsigned package; they sign Firefox when `package.json` version changes. See [CI and deployments](docs/ci.md).
 
@@ -101,7 +101,7 @@ An opt-in background-console mode provides structured diagnostics, JSON export a
 | Path                                   | Responsibility                                                    |
 | -------------------------------------- | ----------------------------------------------------------------- |
 | `apps/extension/src/main.tsx`          | Extension popup                                                   |
-| `apps/extension/src/auth.ts`           | Google OAuth launch and private session storage                   |
+| `apps/extension/src/auth.ts`           | Email/password sign-in and private session storage                |
 | `apps/extension/entrypoints`           | WXT background and popup entrypoints                              |
 | `apps/extension/src/engine.ts`         | Registration, durable queue, reconciliation and recovery          |
 | `apps/extension/src/adapter.ts`        | Browser roots and native projection                               |

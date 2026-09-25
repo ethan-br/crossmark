@@ -42,21 +42,13 @@ The preview job is likewise skipped until `CONVEX_PREVIEW_DEPLOY_KEY` is set, an
 New preview deployments copy **project default** environment variables for the `preview` type. Set these once from a machine already logged into Convex:
 
 ```sh
-npx convex env default set --type preview GOOGLE_CLIENT_ID '…'
-npx convex env default set --type preview GOOGLE_CLIENT_SECRET '…'
 npx convex env default set --type preview BETTER_AUTH_SECRET '…'
-npx convex env default set --type preview AUTH_TRUSTED_ORIGINS 'chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok,https://eblopgfhjccjncfjmgcjfahaggkcolok.chromiumapp.org,https://535884d15b4bf578f81c89ff04b5e3b95b647c0a.extensions.allizom.org'
+npx convex env default set --type preview AUTH_TRUSTED_ORIGINS 'chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok'
 ```
 
-Use a dedicated Better Auth secret for previews, not the production value.
+Use a dedicated Better Auth secret for previews, not the production value. Append any Firefox `moz-extension://` origins you test previews with; see [login setup](auth-setup.md#3-configure-trusted-origins). Each preview has its own user table, so create a test account on it.
 
-Google does not allow wildcard redirect URIs. Live Google login on a given preview also requires adding that deployment's callback:
-
-```text
-https://<preview>.convex.site/api/auth/callback/google
-```
-
-Isolated tests and headless smoke checks do not need that URI; they expect an unconfigured or local backend.
+Isolated tests and headless smoke checks do not need a backend.
 
 Idle previews expire (5 days on Free/Starter, 14 days on paid plans) and count toward the team's deployment limit.
 

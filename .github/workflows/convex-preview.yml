@@ -82,9 +82,7 @@ jobs:
 
             Extension zips from this job are baked against these URLs. Download the \`preview-extension\` artifact to try the PR backend; they are not production.
 
-            Google login on a preview also needs project-level **preview default** env vars (\`GOOGLE_CLIENT_ID\`, \`GOOGLE_CLIENT_SECRET\`, \`BETTER_AUTH_SECRET\`, \`AUTH_TRUSTED_ORIGINS\`) and this deployment's callback URI in Google Cloud:
-
-            \`${site}/api/auth/callback/google\`
+            Login on a preview needs project-level **preview default** env vars (\`BETTER_AUTH_SECRET\`, \`AUTH_TRUSTED_ORIGINS\`). Create a test account in the extension; previews do not share users with production.
             `;
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,

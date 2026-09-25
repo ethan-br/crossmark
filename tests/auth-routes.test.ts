@@ -1,20 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { authenticatedBackend } from './fixtures/auth';
-import { createHash } from 'node:crypto';
-import { extensionManifest } from '../apps/extension/manifest';
 const origin = 'chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok';
-const callback =
-  'https://eblopgfhjccjncfjmgcjfahaggkcolok.chromiumapp.org/auth?state=extension-nonce';
 beforeEach(() => {
   vi.stubEnv('CONVEX_SITE_URL', 'http://127.0.0.1:3211');
   vi.stubEnv('BETTER_AUTH_SECRET', 'test-only-secret-with-at-least-thirty-two-characters');
-  vi.stubEnv('GOOGLE_CLIENT_ID', 'test-only.apps.googleusercontent.com');
-  vi.stubEnv('GOOGLE_CLIENT_SECRET', 'test-only-google-secret');
-  vi.stubEnv('AUTH_TRUSTED_ORIGINS', `${origin},${new URL(callback).origin}`);
+  vi.stubEnv('AUTH_TRUSTED_ORIGINS', origin);
 });
 afterEach(() => vi.unstubAllEnvs());
-async function request(path: string, body: unknown, requestOrigin = origin) {
-  const { unauthenticated: t } = await authenticatedBackend();
+type Backend = Awaited<ReturnType<typeof authenticatedBackend>>['unauthenticated'];
+function request(t: Backend, path: string, body: unknown, requestOrigin = origin) {
   return t.fetch(`/api/auth${path}`, {
     method: 'POST',
     headers: {
@@ -25,104 +19,56 @@ async function request(path: string, body: unknown, requestOrigin = origin) {
     body: JSON.stringify(body),
   });
 }
-it('starts Google OAuth through the real Better Auth HTTP route', async () => {
-  const response = await request('/sign-in/social', {
-    provider: 'google',
-    callbackURL: callback,
-    errorCallbackURL: callback,
-    disableRedirect: true,
+const account = { email: 'user@example.com', name: 'user', password: 'password1234' };
+it('signs up, signs in and issues a Convex token through the real Better Auth routes', async () => {
+  const { unauthenticated: t } = await authenticatedBackend();
+  const signUp = await request(t, '/sign-up/email', account);
+  expect(signUp.status).toBe(200);
+  expect(signUp.headers.get('set-auth-token')).toBeTruthy();
+  const signIn = await request(t, '/sign-in/email', {
+    email: account.email,
+    password: account.password,
   });
-  expect(response.status).toBe(200);
-  const body = await response.json();
-  const url = new URL(body.url);
-  expect(url.origin).toBe('https://accounts.google.com');
-  expect(url.searchParams.get('redirect_uri')).toBe(
-    'http://127.0.0.1:3211/api/auth/callback/google',
-  );
-  expect(url.searchParams.get('state')).toBeTruthy();
-  expect(url.searchParams.get('scope')?.split(' ').sort()).toEqual(['email', 'openid', 'profile']);
+  expect(signIn.status).toBe(200);
+  const token = signIn.headers.get('set-auth-token');
+  expect(token).toBeTruthy();
+  const jwt = await t.fetch('/api/auth/convex/token', {
+    headers: { Authorization: `Bearer ${token}`, Origin: origin },
+  });
+  expect(jwt.status).toBe(200);
+  expect((await jwt.json()).token).toBeTruthy();
 });
-it('accepts the Firefox build callback and relays the unchanged Google URL', async () => {
-  // Bind the regression to the actual build ID, not a mock browser identity.
-  const addonId = extensionManifest('firefox', {}).browser_specific_settings!.gecko!.id!;
-  const hash = createHash('sha1').update(addonId).digest('hex');
-  const redirect = `https://${hash}.extensions.allizom.org/auth`;
-  expect(redirect).toBe(
-    'https://535884d15b4bf578f81c89ff04b5e3b95b647c0a.extensions.allizom.org/auth',
-  );
-  const firefoxOrigin = 'moz-extension://test-profile';
-  vi.stubEnv('AUTH_TRUSTED_ORIGINS', `${firefoxOrigin},${new URL(redirect).origin}`);
-  const response = await request(
-    '/sign-in/social',
-    {
-      provider: 'google',
-      callbackURL: `${redirect}?state=firefox-nonce`,
-      errorCallbackURL: `${redirect}?state=firefox-nonce`,
-      disableRedirect: true,
-    },
-    firefoxOrigin,
-  );
-  expect(response.status).toBe(200);
-  const { url } = await response.json();
-  expect(new URL(url).searchParams.get('redirect_uri')).toBe(
-    'http://127.0.0.1:3211/api/auth/callback/google',
-  );
+it('rejects wrong passwords, duplicate accounts and short passwords', async () => {
   const { unauthenticated: t } = await authenticatedBackend();
-  const relay = await t.fetch(`/extension/google-launch?authorization=${encodeURIComponent(url)}`);
-  expect(relay.status).toBe(302);
-  expect(relay.headers.get('location')).toBe(url);
-  expect(relay.headers.get('cache-control')).toBe('no-store');
-  expect(relay.headers.get('referrer-policy')).toBe('no-referrer');
-});
-it.each([
-  '',
-  'not-a-url',
-  'https://attacker.example/',
-  'https://accounts.google.com.evil.example/o/oauth2/v2/auth',
-  'https://accounts.google.com/logout',
-  'https://accounts.google.com/o/oauth2/v2/auth?client_id=other&redirect_uri=https://evil.example&response_type=code&state=x',
-])('rejects invalid Firefox relay destinations: %s', async (url) => {
-  const { unauthenticated: t } = await authenticatedBackend();
-  const response = await t.fetch(
-    `/extension/google-launch?authorization=${encodeURIComponent(url)}`,
-  );
-  expect(response.status).toBe(400);
-  expect(response.headers.has('location')).toBe(false);
-});
-it('rejects untrusted cookie-bearing origins and callback destinations', async () => {
+  expect((await request(t, '/sign-up/email', account)).status).toBe(200);
+  expect(
+    (await request(t, '/sign-in/email', { email: account.email, password: 'wrong-password' }))
+      .status,
+  ).toBe(401);
+  expect((await request(t, '/sign-up/email', account)).status).toBeGreaterThanOrEqual(400);
   expect(
     (
-      await request(
-        '/sign-in/social',
-        { provider: 'google', callbackURL: callback, disableRedirect: true },
-        'https://attacker.example',
-      )
-    ).status,
-  ).toBe(403);
-  expect(
-    (
-      await request('/sign-in/social', {
-        provider: 'google',
-        callbackURL: 'https://attacker.example/auth',
-        disableRedirect: true,
+      await request(t, '/sign-up/email', {
+        ...account,
+        email: 'other@example.com',
+        password: 'short',
       })
     ).status,
-  ).toBe(403);
+  ).toBe(400);
 });
-it('does not accept email/password login or counterfeit session handoffs', async () => {
+it('rejects untrusted cookie-bearing origins', async () => {
+  const { unauthenticated: t } = await authenticatedBackend();
+  expect((await request(t, '/sign-up/email', account, 'https://attacker.example')).status).toBe(
+    403,
+  );
+});
+it('no longer offers Google login or session handoffs', async () => {
+  const { unauthenticated: t } = await authenticatedBackend();
   expect(
-    (await request('/sign-in/email', { email: 'user@example.com', password: 'password' })).status,
+    (await request(t, '/sign-in/social', { provider: 'google', disableRedirect: true })).status,
   ).toBeGreaterThanOrEqual(400);
   expect(
-    (
-      await request('/sign-up/email', {
-        email: 'user@example.com',
-        name: 'User',
-        password: 'password1234',
-      })
-    ).status,
+    (await request(t, '/cross-domain/one-time-token/verify', { token: 'invented' })).status,
   ).toBeGreaterThanOrEqual(400);
-  expect(
-    (await request('/cross-domain/one-time-token/verify', { token: 'invented' })).status,
-  ).toBeGreaterThanOrEqual(400);
+  expect((await t.fetch('/extension/google-launch')).status).toBe(404);
 });
