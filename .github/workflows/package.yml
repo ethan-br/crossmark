@@ -36,7 +36,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run package
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: extension-packages
           path: |
@@ -97,7 +97,7 @@ jobs:
         run: npm run package
       - if: steps.release.outputs.needed == 'true'
         run: node scripts/sign-firefox.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.release.outputs.needed == 'true'
         with:
           name: extension-signed
