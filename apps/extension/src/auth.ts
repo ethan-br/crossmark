@@ -32,7 +32,7 @@ const messages: Record<string, string | ((site: string) => string)> = {
   EMAIL_PASSWORD_DISABLED: outdatedBackend,
   EMAIL_PASSWORD_SIGN_UP_DISABLED: outdatedBackend,
   404: outdatedBackend,
-  429: 'Too many attempts. Wait a few minutes and try again.',
+  429: 'Too many attempts. Sign-in allows 10 every 5 minutes; creating an account allows 5 an hour.',
 };
 export class PasswordSession implements SessionAuth {
   private jwt?: { value: string; expiresAt: number };

@@ -54,10 +54,12 @@ Reload the extension, open it, choose **Create an account**, enter an email, a p
 
 ## Setting or resetting a password
 
-Accounts created with the earlier Google login have no password, and there is no self-service reset. The deployment operator can set one:
+Accounts created with the earlier Google login have no password, and there is no self-service reset. The deployment operator can set one. Read the password without echoing it so it stays out of the shell history and out of `ps` output:
 
-```sh
-npx convex run auth:setPassword '{"email":"user@example.com","password":"a-new-password"}'
+```bash
+read -rs -p 'New password: ' PASSWORD && echo
+npx convex run auth:setPassword "{\"email\":\"user@example.com\",\"password\":\"$PASSWORD\"}"
+unset PASSWORD
 ```
 
 Add `--prod` (or `--preview-name …`) to target another deployment. This works for both password-less and existing accounts, keeps the account's collection, and ends every existing session, so each browser asks for the new password on its next sync. The function is internal; it cannot be called from the extension or the public HTTP routes.
@@ -77,7 +79,7 @@ Deploy the Convex functions from the same commit as the extension build. A curre
 - **Invalid email or password:** check the credentials, or create an account first. A Google-created account needs a password [set by the operator](#setting-or-resetting-a-password).
 - **An account with this email already exists:** sign in instead of creating an account.
 - **Does not support email/password login:** deploy this version's Convex functions to the backend the extension was built for.
-- **Too many attempts:** wait for the rate-limit window to pass.
+- **Too many attempts:** wait for the rate-limit window to pass — 5 minutes for sign-in, an hour for creating an account. The limiter counts an attempt before the origin check rejects the request, so a stale Firefox profile origin can exhaust the sign-up limit without the origin error ever appearing; fix the origin first.
 - **Sign-in required:** sign in with the same account again. Pending changes remain local. Export is available without a valid session; pausing also works without network access.
 
 For diagnostics, enable [debug mode](debugging.md) before reproducing. `auth.signIn` and `command.connect` record operation outcomes without credentials or tokens.

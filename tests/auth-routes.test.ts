@@ -72,15 +72,23 @@ it('lets an operator set a password on a password-less account and reset it', as
   const email = 'google-user@example.com';
   await create(email);
   const signIn = (password: string) => request(t, '/sign-in/email', { email, password });
+  const exchange = (token: string) =>
+    t.fetch('/api/auth/convex/token', {
+      headers: { Authorization: `Bearer ${token}`, Origin: origin },
+    });
   expect((await signIn('first-password')).status).toBe(401);
   await t.action(internal.auth.setPassword, { email, password: 'first-password' });
-  expect((await signIn('first-password')).status).toBe(200);
+  const first = await signIn('first-password');
+  expect(first.status).toBe(200);
+  const session = first.headers.get('set-auth-token') as string;
+  expect((await exchange(session)).status).toBe(200);
   await t.action(internal.auth.setPassword, {
     email: ` ${email.toUpperCase()} `,
     password: 'second-password',
   });
   expect((await signIn('first-password')).status).toBe(401);
   expect((await signIn('second-password')).status).toBe(200);
+  expect((await exchange(session)).status).toBe(401);
   await expect(t.action(internal.auth.setPassword, { email, password: 'short' })).rejects.toThrow(
     'between 8 and 128',
   );
