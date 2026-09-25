@@ -17,6 +17,8 @@ export interface State {
   browser: string;
   connected: boolean;
   paused: boolean;
+  /** A local pause change the server has not acknowledged yet. */
+  pausePending?: boolean;
   status: 'setup' | 'ready' | 'syncing' | 'offline' | 'error' | 'review' | 'paused';
   error?: string;
   baseline: Node[];

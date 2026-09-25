@@ -12,6 +12,7 @@ export type Command =
   | { type: 'connect'; name: string; credentials: Credentials }
   | { type: 'sync' }
   | { type: 'pause' }
+  | { type: 'pauseDevice'; deviceId: string; paused: boolean }
   | { type: 'approve' }
   | { type: 'disconnect' }
   | { type: 'revoke'; deviceId: string }
@@ -127,13 +128,26 @@ export class Engine {
         return publicState(await this.store.read());
       }
       if (!state.deviceId || !state.connected) throw new Error('Sign in to connect this browser.');
-      if (['revoke', 'approve', 'restore'].includes(command.type)) await this.authorize();
+      const remotePause = command.type === 'pauseDevice' && command.deviceId !== state.deviceId;
+      if (['revoke', 'approve', 'restore'].includes(command.type) || remotePause)
+        await this.authorize();
       if (command.type === 'revoke') {
+        if (command.deviceId === state.deviceId)
+          throw new Error('Use Disconnect on this browser to remove it.');
         await this.client.mutation(api.sync.revoke, {
           deviceId: state.deviceId as Id<'devices'>,
           targetDeviceId: command.deviceId as Id<'devices'>,
         });
-        await this.exchange();
+        await this.refresh();
+        return publicState(await this.store.read());
+      }
+      if (command.type === 'pauseDevice' && remotePause) {
+        await this.client.mutation(api.sync.setPaused, {
+          deviceId: state.deviceId as Id<'devices'>,
+          targetDeviceId: command.deviceId as Id<'devices'>,
+          paused: command.paused,
+        });
+        await this.refresh();
         return publicState(await this.store.read());
       }
       if (command.type === 'disconnect') {
@@ -162,8 +176,9 @@ export class Engine {
         await this.save(state);
         return publicState(state);
       }
-      if (command.type === 'pause') {
-        state.paused = !state.paused;
+      if (command.type === 'pause' || command.type === 'pauseDevice') {
+        state.paused = command.type === 'pause' ? !state.paused : command.paused;
+        state.pausePending = true;
         state.status = state.paused ? 'paused' : 'ready';
         await this.save(state);
       }
@@ -208,11 +223,13 @@ export class Engine {
         }
         await this.save(state);
       }
-      if (!state.paused || command.type === 'sync') {
+      // A paused exchange only captures local edits and reports the pause to the server.
+      if (!state.paused || ['sync', 'pause', 'pauseDevice'].includes(command.type)) {
         delete state.nextRetryAt;
         await this.save(state);
         if (command.type === 'sync' && state.paused) {
           state.paused = false;
+          state.pausePending = true;
           await this.save(state);
         }
         await this.exchange();
@@ -222,6 +239,43 @@ export class Engine {
   }
   sync() {
     return this.run(() => this.exchange());
+  }
+  private async refresh() {
+    const state = await this.store.read();
+    state.snapshot = (await this.client.query(api.sync.snapshot, {
+      deviceId: state.deviceId as Id<'devices'>,
+    })) as Snapshot;
+    await this.save(state);
+  }
+  // Report an unacknowledged local pause change; otherwise adopt the server flag,
+  // which another browser in the collection may have changed.
+  private async reconcilePause(state: State) {
+    const deviceId = state.deviceId as Id<'devices'>;
+    if (state.pausePending) {
+      await this.client.mutation(api.sync.setPaused, {
+        deviceId,
+        targetDeviceId: deviceId,
+        paused: state.paused,
+      });
+      delete state.pausePending;
+    } else state.paused = await this.client.query(api.sync.pauseState, { deviceId });
+    await this.save(state);
+  }
+  // A paused browser stays paused while the server is unreachable.
+  private async stayPaused(state: State) {
+    if (!state.nextRetryAt || Date.now() >= state.nextRetryAt)
+      try {
+        await this.authorize();
+        await this.reconcilePause(state);
+      } catch {
+        debug.event('sync.pause', 'failure');
+      }
+    return state.paused;
+  }
+  private async pausedExit(state: State) {
+    debug.event('sync.exchange', 'paused');
+    state.status = 'paused';
+    await this.save(state);
   }
   private async capture(state: State) {
     const local = await this.adapter.read(state);
@@ -280,7 +334,7 @@ export class Engine {
           await this.save(state);
           return;
         }
-        if (state.paused) return;
+        if (state.paused && (await this.stayPaused(state))) return;
         await this.authorize();
         state.joinLocal = local;
         await this.save(state);
@@ -314,12 +368,7 @@ export class Engine {
         await this.save(state);
       }
       await this.capture(state);
-      if (state.paused) {
-        debug.event('sync.exchange', 'paused');
-        state.status = 'paused';
-        await this.save(state);
-        return;
-      }
+      if (state.paused && (await this.stayPaused(state))) return this.pausedExit(state);
       if (state.reviewCount && !state.safetyApproved) {
         debug.event('sync.exchange', 'review');
         state.status = 'review';
@@ -335,6 +384,8 @@ export class Engine {
       delete state.error;
       state.needsSignIn = false;
       await this.save(state);
+      await this.reconcilePause(state);
+      if (state.paused) return this.pausedExit(state);
       let passes = 0;
       do {
         while (state.outbox.length) {

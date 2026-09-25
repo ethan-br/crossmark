@@ -36,10 +36,10 @@ export interface Activity {
 export interface Device {
   id: string;
   name: string;
-  browser: string;
   lastSeen: number;
   cursor: number;
   revoked: boolean;
+  paused: boolean;
 }
 export interface Snapshot {
   nodes: Node[];

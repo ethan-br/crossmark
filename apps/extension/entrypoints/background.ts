@@ -106,6 +106,7 @@ export default defineBackground(() => {
     'connect',
     'sync',
     'pause',
+    'pauseDevice',
     'approve',
     'disconnect',
     'revoke',
@@ -136,6 +137,8 @@ export default defineBackground(() => {
     }
     if (
       (m.type === 'revoke' && typeof m.deviceId !== 'string') ||
+      (m.type === 'pauseDevice' &&
+        (typeof m.deviceId !== 'string' || typeof m.paused !== 'boolean')) ||
       (m.type === 'restore' && typeof m.activityId !== 'string')
     )
       return Promise.resolve({ error: 'Invalid command.' });

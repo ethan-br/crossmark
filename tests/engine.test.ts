@@ -519,6 +519,95 @@ it('allows a revoked browser without pending work to clear its connection', asyn
   expect((await b.store.read()).connected).toBe(false);
   expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
 });
+describe('browser controls', () => {
+  const peer = async (viewer: { store: Store }, target: { store: Store }) => {
+    const id = (await target.store.read()).deviceId;
+    return (await viewer.store.read()).snapshot!.devices.find((d) => d.id === id)!;
+  };
+  it('reports a local pause and resume to other browsers', async () => {
+    const { a, b } = await connectPair();
+    await a.engine.command({ type: 'pause' });
+    expect((await a.store.read()).pausePending).toBeUndefined();
+    await ready(b);
+    expect((await peer(b, a)).paused).toBe(true);
+    await a.engine.command({
+      type: 'pauseDevice',
+      deviceId: (await a.store.read()).deviceId!,
+      paused: false,
+    });
+    await ready(b);
+    expect((await peer(b, a)).paused).toBe(false);
+  });
+  it('pauses and resumes another browser remotely', async () => {
+    const { a, b } = await connectPair();
+    await ready(b);
+    const target = (await b.store.read()).deviceId!;
+    await a.engine.command({ type: 'pauseDevice', deviceId: target, paused: true });
+    expect((await a.store.read()).paused).toBe(false);
+    expect((await peer(a, b)).paused).toBe(true);
+    await b.engine.sync();
+    expect((await b.store.read()).paused).toBe(true);
+    expect((await b.store.read()).status).toBe('paused');
+    await a.native.create({ parentId: '1', title: 'While paused', url: 'https://paused.example' });
+    await b.native.create({ parentId: '1', title: 'Held back', url: 'https://held.example' });
+    await ready(a);
+    await b.engine.sync();
+    expect(b.native.nodes.find((n) => n.url === 'https://paused.example')).toBeUndefined();
+    expect((await b.store.read()).outbox).toHaveLength(1);
+    await a.engine.command({ type: 'pauseDevice', deviceId: target, paused: false });
+    expect((await peer(a, b)).paused).toBe(false);
+    const resumed = await ready(b);
+    expect(resumed.paused).toBe(false);
+    expect(resumed.outbox).toHaveLength(0);
+    expect(b.native.nodes.find((n) => n.url === 'https://paused.example')).toBeDefined();
+    await ready(a);
+    expect(a.native.nodes.find((n) => n.url === 'https://held.example')).toBeDefined();
+  });
+  it('lets a remotely paused browser resume itself', async () => {
+    const { a, b } = await connectPair();
+    const target = (await b.store.read()).deviceId!;
+    await a.engine.command({ type: 'pauseDevice', deviceId: target, paused: true });
+    await b.engine.sync();
+    expect((await b.store.read()).paused).toBe(true);
+    await b.engine.command({ type: 'pause' });
+    expect((await ready(b)).paused).toBe(false);
+    await ready(a);
+    expect((await peer(a, b)).paused).toBe(false);
+  });
+  it('keeps a local pause while the server is unreachable and reports it later', async () => {
+    const { a, b } = await connectPair();
+    const mutation = vi.spyOn(a.transport, 'mutation').mockRejectedValue(new TypeError('offline'));
+    await a.engine.command({ type: 'pause' });
+    mutation.mockRestore();
+    expect((await a.store.read()).paused).toBe(true);
+    expect((await a.store.read()).pausePending).toBe(true);
+    await a.engine.sync();
+    expect((await a.store.read()).pausePending).toBeUndefined();
+    await ready(b);
+    expect((await peer(b, a)).paused).toBe(true);
+  });
+  it('disconnects another browser and removes it from the collection', async () => {
+    const { a, b } = await connectPair();
+    await a.engine.command({ type: 'revoke', deviceId: (await b.store.read()).deviceId! });
+    expect((await peer(a, b)).revoked).toBe(true);
+    await b.engine.sync();
+    expect((await b.store.read()).status).toBe('error');
+    expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
+  });
+  it('disconnects this browser and removes it from the collection', async () => {
+    const { a, b } = await connectPair();
+    await ready(b);
+    const self = (await b.store.read()).deviceId!;
+    await expect(b.engine.command({ type: 'revoke', deviceId: self })).rejects.toThrow(
+      'Disconnect',
+    );
+    await b.engine.command({ type: 'disconnect' });
+    expect((await b.store.read()).connected).toBe(false);
+    expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
+    await ready(a);
+    expect((await a.store.read()).snapshot!.devices.find((d) => d.id === self)?.revoked).toBe(true);
+  });
+});
 it('serves live persisted status while a network exchange is pending', async () => {
   const { a } = await connectPair();
   const original = a.transport.query;

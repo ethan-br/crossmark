@@ -117,6 +117,47 @@ describe('Convex authorization and durable operations', () => {
     ).rejects.toThrow('Out-of-order');
     expect((await t.query(api.sync.snapshot, { deviceId })).revision).toBe(1);
   });
+  it('pauses another browser in the same collection only', async () => {
+    const { t, account, deviceId } = await setup();
+    const second = await t.mutation(api.sync.connect, {
+      installationId: crypto.randomUUID(),
+      name: 'Second',
+      browser: 'Firefox',
+      nodes: [],
+    });
+    expect(await t.query(api.sync.pauseState, { deviceId: second.deviceId })).toBe(false);
+    await t.mutation(api.sync.setPaused, {
+      deviceId,
+      targetDeviceId: second.deviceId,
+      paused: true,
+    });
+    expect(await t.query(api.sync.pauseState, { deviceId: second.deviceId })).toBe(true);
+    const devices = (await t.query(api.sync.snapshot, { deviceId })).devices;
+    expect(devices.find((d) => d.id === second.deviceId)?.paused).toBe(true);
+    expect(devices.find((d) => d.id === deviceId)?.paused).toBe(false);
+    const other = await account('other@example.com');
+    const outsider = await other.t.mutation(api.sync.connect, {
+      installationId,
+      name: 'Other',
+      browser: 'Firefox',
+      nodes: [],
+    });
+    await expect(
+      t.mutation(api.sync.setPaused, {
+        deviceId,
+        targetDeviceId: outsider.deviceId,
+        paused: true,
+      }),
+    ).rejects.toThrow('not found');
+    await t.mutation(api.sync.revoke, { deviceId, targetDeviceId: second.deviceId });
+    await expect(
+      t.mutation(api.sync.setPaused, {
+        deviceId,
+        targetDeviceId: second.deviceId,
+        paused: false,
+      }),
+    ).rejects.toThrow('not found');
+  });
   it('rejects a checkpoint ahead of the collection', async () => {
     const { t, deviceId } = await setup();
     await expect(t.mutation(api.sync.checkpoint, { deviceId, cursor: 500 })).rejects.toThrow(
