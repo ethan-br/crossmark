@@ -23,8 +23,7 @@
     "postinstall": "wxt prepare",
     "build:chromium": "npm run typecheck && wxt build",
     "build:firefox": "npm run typecheck && wxt build -b firefox",
-    "test:debug": "node scripts/debug-smoke.mjs",
-    "test:firefox-auth": "node scripts/firefox-auth-smoke.mjs"
+    "test:debug": "node scripts/debug-smoke.mjs"
   },
   "engines": {
     "node": ">=22"

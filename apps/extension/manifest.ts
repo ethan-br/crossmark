@@ -23,7 +23,7 @@ export function extensionManifest(browser: string, env: PublicEnvironment): User
   return {
     name: 'Crossmark',
     description: 'Synchronize native bookmarks across desktop browsers.',
-    permissions: ['bookmarks', 'storage', 'alarms', 'identity'],
+    permissions: ['bookmarks', 'storage', 'alarms'],
     host_permissions: [...new Set([`${origin}/*`, `${siteOrigin}/*`])],
     icons,
     action: { default_icon: icons },

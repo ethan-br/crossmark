@@ -13,7 +13,7 @@ async function authenticate(ctx: QueryCtx | MutationCtx, deviceId: Id<'devices'>
   const user = await authComponent.getAuthUser(ctx);
   const device = await ctx.db.get(deviceId);
   if (!device || device.revoked || device.ownerId !== user._id)
-    return fail('This browser is disconnected. Sign in with Google to reconnect.');
+    return fail('This browser is disconnected. Sign in to reconnect.');
   return device;
 }
 function label(value: string) {

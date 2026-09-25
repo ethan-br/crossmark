@@ -7,6 +7,7 @@ import { MemoryBookmarks } from './fixtures/bookmarks';
 import { initialState, type State, type Store } from '../apps/extension/src/state';
 import type { ConvexHttpClient } from 'convex/browser';
 import { getFunctionName } from 'convex/server';
+const credentials = { email: 'test@example.com', password: 'password1234' };
 async function setup() {
   const { t, auth } = await authenticatedBackend();
   function device(name: string, browser = 'Chromium') {
@@ -42,8 +43,8 @@ async function connectPair() {
   const a = env.device('First');
   const b = env.device('Second');
   await a.native.create({ title: 'First bookmark', url: 'https://one.example', parentId: '1' });
-  await a.engine.command({ type: 'connect', name: 'First' });
-  await b.engine.command({ type: 'connect', name: 'Second' });
+  await a.engine.command({ type: 'connect', credentials, name: 'First' });
+  await b.engine.command({ type: 'connect', credentials, name: 'Second' });
   return { ...env, a, b };
 }
 async function ready(d: ReturnType<Awaited<ReturnType<typeof setup>>['device']>) {
@@ -73,7 +74,7 @@ describe('two-browser synchronization and recovery', () => {
       title: 'Cloud title',
       url: 'https://shared.example',
     });
-    await a.engine.command({ type: 'connect', name: 'First' });
+    await a.engine.command({ type: 'connect', credentials, name: 'First' });
     const original = (await a.store.read()).snapshot!.nodes;
     const reused = await b.native.create({
       parentId: bRoot,
@@ -88,7 +89,7 @@ describe('two-browser synchronization and recovery', () => {
     });
     await b.native.create({ parentId: localFolder.id, title: 'New', url: 'https://new.example' });
     await b.native.create({ parentId: bRoot, title: 'New duplicate', url: 'https://new.example' });
-    await b.engine.command({ type: 'connect', name: 'Second' });
+    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
     expect((await b.store.read()).status).toBe('review');
     await b.engine.command({ type: 'approve' });
     const joined = await ready(b);
@@ -104,9 +105,9 @@ describe('two-browser synchronization and recovery', () => {
     expect(b.native.nodes.find((n) => n.url === 'https://shared.example')?.id).toBe(reused.id);
     const revision = joined.snapshot!.revision;
     await b.engine.command({ type: 'approve' });
-    await b.engine.command({ type: 'connect', name: 'Second' });
+    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
     await b.engine.command({ type: 'disconnect' });
-    await b.engine.command({ type: 'connect', name: 'Second' });
+    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
     await b.engine.command({ type: 'approve' });
     expect((await ready(b)).snapshot!.revision).toBe(revision);
     expect((await ready(a)).snapshot!.nodes).toEqual(joined.snapshot!.nodes);
@@ -117,10 +118,10 @@ describe('two-browser synchronization and recovery', () => {
     const a = device('A'),
       b = device('B'),
       c = device('C');
-    await a.engine.command({ type: 'connect', name: 'A' });
+    await a.engine.command({ type: 'connect', credentials, name: 'A' });
     for (const d of [b, c]) {
       await d.native.create({ parentId: '1', title: 'Shared new URL', url: 'https://new.example' });
-      await d.engine.command({ type: 'connect', name: 'Joining' });
+      await d.engine.command({ type: 'connect', credentials, name: 'Joining' });
     }
     await b.engine.command({ type: 'approve' });
     await c.engine.command({ type: 'approve' });
@@ -141,17 +142,17 @@ describe('two-browser synchronization and recovery', () => {
         title: `Cloud ${i}`,
         url: 'https://same.example',
       });
-    await a.engine.command({ type: 'connect', name: 'Firefox' });
+    await a.engine.command({ type: 'connect', credentials, name: 'Firefox' });
     for (let i = 0; i < 3; i++)
       await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://same.example' });
     const original = (await a.store.read()).snapshot!;
-    await b.engine.command({ type: 'connect', name: 'Chrome' });
+    await b.engine.command({ type: 'connect', credentials, name: 'Chrome' });
     await b.engine.command({ type: 'approve' });
     expect((await ready(b)).snapshot!.nodes).toEqual(original.nodes);
     expect(b.native.nodes.filter((n) => n.url)).toHaveLength(2);
     expect(b.native.nodes.filter((n) => n.type === 'separator')).toHaveLength(0);
     await b.engine.command({ type: 'disconnect' });
-    await b.engine.command({ type: 'connect', name: 'Chrome' });
+    await b.engine.command({ type: 'connect', credentials, name: 'Chrome' });
     await b.engine.command({ type: 'approve' });
     expect((await ready(b)).snapshot!.nodes).toEqual(original.nodes);
     expect(b.native.nodes.filter((n) => n.title === 'Bookmarks Menu')).toHaveLength(1);
@@ -169,7 +170,7 @@ describe('two-browser synchronization and recovery', () => {
         url: `https://new.example/${i}`,
       });
     }
-    await b.engine.command({ type: 'connect', name: 'Joining' });
+    await b.engine.command({ type: 'connect', credentials, name: 'Joining' });
     await b.engine.command({ type: 'approve' });
     expect((await ready(b)).snapshot!.nodes).toHaveLength(4);
     await ready(a);
@@ -189,7 +190,7 @@ describe('two-browser synchronization and recovery', () => {
       url: 'https://new.example',
     });
     await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://one.example' });
-    await b.engine.command({ type: 'connect', name: 'Joining' });
+    await b.engine.command({ type: 'connect', credentials, name: 'Joining' });
     const normal = b.transport.mutation;
     let fail = true;
     b.transport.mutation = (async (...args: Parameters<typeof normal>) => {
@@ -227,7 +228,7 @@ describe('two-browser synchronization and recovery', () => {
     const b = device('Joining');
     for (let i = 0; i < 2; i++)
       await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://one.example' });
-    await b.engine.command({ type: 'connect', name: 'Joining' });
+    await b.engine.command({ type: 'connect', credentials, name: 'Joining' });
     const remove = b.native.remove.bind(b.native);
     let fail = true;
     b.native.remove = async (id) => {
@@ -250,7 +251,7 @@ describe('two-browser synchronization and recovery', () => {
     const b = device('Joining');
     for (let i = 0; i < 2; i++)
       await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://one.example' });
-    await b.engine.command({ type: 'connect', name: 'Joining' });
+    await b.engine.command({ type: 'connect', credentials, name: 'Joining' });
     const query = vi
       .spyOn(b.transport, 'query')
       .mockRejectedValueOnce(new TypeError('Network offline'));
@@ -305,8 +306,8 @@ describe('two-browser synchronization and recovery', () => {
       b = device('B');
     await a.native.create({ parentId: '1', title: 'A', url: 'https://same.example' });
     await b.native.create({ parentId: '1', title: 'B', url: 'https://same.example' });
-    await a.engine.command({ type: 'connect', name: 'A' });
-    await b.engine.command({ type: 'connect', name: 'B' });
+    await a.engine.command({ type: 'connect', credentials, name: 'A' });
+    await b.engine.command({ type: 'connect', credentials, name: 'B' });
     expect((await b.store.read()).status).toBe('review');
     expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
     await b.engine.command({ type: 'approve' });
@@ -393,9 +394,9 @@ describe('safety and partial failure regressions', () => {
     const { device } = await setup();
     const a = device('A'),
       b = device('B');
-    await a.engine.command({ type: 'connect', name: 'A' });
+    await a.engine.command({ type: 'connect', credentials, name: 'A' });
     await b.native.create({ parentId: '1', title: 'Local only', url: 'https://local.example' });
-    await b.engine.command({ type: 'connect', name: 'B' });
+    await b.engine.command({ type: 'connect', credentials, name: 'B' });
     await b.engine.command({ type: 'pause' });
     await b.engine.command({ type: 'pause' });
     expect((await b.store.read()).status).toBe('review');
@@ -406,7 +407,7 @@ describe('safety and partial failure regressions', () => {
     const a = device('A');
     for (let i = 0; i < 25; i++)
       await a.native.create({ parentId: '1', title: `Item ${i}`, url: `https://example.com/${i}` });
-    await a.engine.command({ type: 'connect', name: 'A' });
+    await a.engine.command({ type: 'connect', credentials, name: 'A' });
     for (const n of [...a.native.nodes].filter((n) => n.url)) await a.native.remove(n.id);
     await a.engine.sync();
     let s = await a.store.read();
@@ -457,12 +458,12 @@ describe('safety and partial failure regressions', () => {
       }
       return result;
     }) as typeof normal;
-    await expect(a.engine.command({ type: 'connect', name: 'A' })).rejects.toThrow(
+    await expect(a.engine.command({ type: 'connect', credentials, name: 'A' })).rejects.toThrow(
       'Connection lost',
     );
     await a.native.update(item.id, { title: 'After' });
     await a.engine.command({ type: 'state' });
-    await a.engine.command({ type: 'connect', name: 'A' });
+    await a.engine.command({ type: 'connect', credentials, name: 'A' });
     expect((await ready(a)).snapshot?.nodes[0].title).toBe('After');
   });
   it('preserves unrelated edits received during remote projection', async () => {
@@ -537,10 +538,10 @@ it('serves live persisted status while a network exchange is pending', async () 
   await sync;
 });
 
-it('allows pausing and signing out after the Google session expires', async () => {
+it('allows pausing and signing out after the session expires', async () => {
   const { a } = await connectPair();
   a.auth.token = async () => {
-    throw new Error('Sign in with Google to continue.');
+    throw new Error('Sign in to continue.');
   };
   await a.engine.command({ type: 'pause' });
   expect((await a.store.read()).paused).toBe(true);
@@ -551,7 +552,7 @@ it('allows pausing and signing out after the Google session expires', async () =
 it('keeps pending edits when reauthentication is needed', async () => {
   const { a } = await connectPair();
   a.auth.token = async () => {
-    throw new Error('Sign in with Google to continue.');
+    throw new Error('Sign in to continue.');
   };
   await a.native.create({
     parentId: '1',
@@ -565,11 +566,23 @@ it('keeps pending edits when reauthentication is needed', async () => {
   const exported = (await a.engine.command({ type: 'export' })) as { pending: unknown[] };
   expect(exported.pending).toHaveLength(1);
 });
-it('rejects changing Google accounts on an existing installation', async () => {
+it('reports an unreachable auth backend as offline, not a sign-in failure', async () => {
+  const { a } = await connectPair();
+  a.auth.token = async () => {
+    throw new Error('Could not reach the Crossmark backend at https://backend.convex.site.');
+  };
+  await a.engine.sync();
+  const state = await a.store.read();
+  expect(state.status).toBe('offline');
+  expect(state.needsSignIn).toBe(false);
+});
+it('rejects changing accounts on an existing installation', async () => {
   const { a } = await connectPair();
   const previous = await a.store.read();
   a.auth.signIn = async () => ({ id: 'different-user', email: 'other@example.com', name: 'Other' });
-  await expect(a.engine.command({ type: 'connect', name: 'A' })).rejects.toThrow('Sign in as');
+  await expect(a.engine.command({ type: 'connect', credentials, name: 'A' })).rejects.toThrow(
+    'Sign in as',
+  );
   const state = await a.store.read();
   expect(state.account).toEqual(previous.account);
   expect(state.deviceId).toBe(previous.deviceId);
@@ -589,7 +602,7 @@ it('records connection, reconciliation, retry and bookmark diagnostics without c
       title: 'Secret bookmark',
       url: 'https://secret.example',
     });
-    await a.engine.command({ type: 'connect', name: 'Private device' });
+    await a.engine.command({ type: 'connect', credentials, name: 'Private device' });
     await a.engine.command({ type: 'pause' });
     await a.engine.sync();
     await a.engine.command({ type: 'pause' });

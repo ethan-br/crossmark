@@ -10,7 +10,7 @@ Tombstones and operation history are not compacted in v0. This avoids resurrecti
 
 ## Initialization and joining
 
-After Google login through Convex Better Auth, a device durably stores an installation UUID and source snapshot before registration. Registration is idempotent by authenticated account and installation ID. The first registration atomically creates the account collection and device; an empty seed is a fully initialized empty collection. Later installations signed into the same account join the existing collection without reseeding it. UUIDs are identifiers, not authentication credentials.
+After email/password login through Convex Better Auth, a device durably stores an installation UUID and source snapshot before registration. Registration is idempotent by authenticated account and installation ID. The first registration atomically creates the account collection and device; an empty seed is a fully initialized empty collection. Later installations signed into the same account join the existing collection without reseeding it. UUIDs are identifiers, not authentication credentials.
 
 A nonempty joining browser always stops at review, including after pause/resume or restart. Approval saves a server backup, then reconciles against the current cloud collection. Cloud records, titles, hierarchy, order and existing duplicates remain authoritative. The browser reuses matching native entries, imports new content, and removes surplus local copies through journaled native writes. The original local snapshot remains available in the recovery export.
 
@@ -28,7 +28,7 @@ Large local batches (over 50 operations or over 20 removals) stop for review, re
 
 ## Product boundaries
 
-Default permissions are bookmarks, local storage, alarms, identity, and the configured Convex functions/auth origins. There are no page scripts, page access grants, toasts, notification permissions, or automatic popup windows.
+Default permissions are bookmarks, local storage, alarms, and the configured Convex functions/auth origins. There are no page scripts, page access grants, toasts, notification permissions, or automatic popup windows.
 
 The configured local Convex backend is ready to run. A cloud deployment must be created separately and its URL supplied in `.env.local`, followed by a rebuild. No production cloud resource was created by this implementation.
 

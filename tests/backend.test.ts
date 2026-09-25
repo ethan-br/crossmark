@@ -52,7 +52,7 @@ describe('Convex authorization and durable operations', () => {
       'disconnected',
     );
   });
-  it('isolates Google accounts on reads, writes and revocation', async () => {
+  it('isolates accounts on reads, writes and revocation', async () => {
     const { t, account, deviceId } = await setup();
     const other = await account('other@example.com');
     const second = await other.t.mutation(api.sync.connect, {
