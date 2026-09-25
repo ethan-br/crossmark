@@ -1,6 +1,6 @@
 # Login setup
 
-Crossmark uses Better Auth email/password login on the Convex backend. There is no social provider, email code or manual device enrollment flow. Email verification and password reset are not enabled in this version.
+Crossmark uses Better Auth email/password login on the Convex backend. There is no social provider, email code or manual device enrollment flow. Email verification and self-service password reset are not enabled in this version; the operator can [set a password](#setting-or-resetting-a-password).
 
 ## 1. Choose the backend
 
@@ -52,12 +52,32 @@ npm run build
 
 Reload the extension, open it, choose **Create an account**, enter an email, a password of at least 8 characters and a browser name, and submit. In the second browser, sign in with the same email and password and approve its merge if it has bookmarks. Follow [the manual test checklist](test-plan.md).
 
+## Setting or resetting a password
+
+Accounts created with the earlier Google login have no password, and there is no self-service reset. The deployment operator can set one:
+
+```sh
+npx convex run auth:setPassword '{"email":"user@example.com","password":"a-new-password"}'
+```
+
+Add `--prod` (or `--preview-name …`) to target another deployment. This works for both password-less and existing accounts, keeps the account's collection, and ends every existing session, so each browser asks for the new password on its next sync. The function is internal; it cannot be called from the extension or the public HTTP routes.
+
+## Rate limiting
+
+Better Auth's limiter is enabled explicitly (it otherwise depends on `NODE_ENV`, which Convex does not set) and stores counters in the component's `rateLimit` table. Per client IP, `/sign-in/email` allows 10 attempts per 5 minutes and `/sign-up/email` 5 per hour; other auth routes use Better Auth's defaults. If Better Auth cannot resolve a client IP it logs a warning and falls back to one bucket per route for everyone; check the deployment logs for that warning after deploying.
+
+## Backend and extension versions
+
+Deploy the Convex functions from the same commit as the extension build. A current extension against a backend without email/password login reports that the backend must be redeployed. An extension built before email/password login cannot sign in to a current backend; rebuild and reload it.
+
 ## Troubleshooting
 
 - **Add … to AUTH_TRUSTED_ORIGINS:** add the exact extension origin shown; Firefox's profile UUID can change.
 - **Could not reach the Crossmark backend:** verify both `.env.local` backend URLs, rebuild and reload. Both origins must appear in the generated manifest's host permissions and connection policy.
-- **Invalid email or password:** check the credentials, or create an account first.
-- **User already exists:** sign in instead of creating an account.
+- **Invalid email or password:** check the credentials, or create an account first. A Google-created account needs a password [set by the operator](#setting-or-resetting-a-password).
+- **An account with this email already exists:** sign in instead of creating an account.
+- **Does not support email/password login:** deploy this version's Convex functions to the backend the extension was built for.
+- **Too many attempts:** wait for the rate-limit window to pass.
 - **Sign-in required:** sign in with the same account again. Pending changes remain local. Export is available without a valid session; pausing also works without network access.
 
 For diagnostics, enable [debug mode](debugging.md) before reproducing. `auth.signIn` and `command.connect` record operation outcomes without credentials or tokens.

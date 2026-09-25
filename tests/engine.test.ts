@@ -566,6 +566,16 @@ it('keeps pending edits when reauthentication is needed', async () => {
   const exported = (await a.engine.command({ type: 'export' })) as { pending: unknown[] };
   expect(exported.pending).toHaveLength(1);
 });
+it('reports an unreachable auth backend as offline, not a sign-in failure', async () => {
+  const { a } = await connectPair();
+  a.auth.token = async () => {
+    throw new Error('Could not reach the Crossmark backend at https://backend.convex.site.');
+  };
+  await a.engine.sync();
+  const state = await a.store.read();
+  expect(state.status).toBe('offline');
+  expect(state.needsSignIn).toBe(false);
+});
 it('rejects changing accounts on an existing installation', async () => {
   const { a } = await connectPair();
   const previous = await a.store.read();

@@ -22,6 +22,18 @@ interface StoredSession {
   account?: Account;
 }
 const signInRequired = 'Sign in to continue.';
+const passwordHelp =
+  'Accounts created with Google sign-in need a password set by the backend operator; see docs/auth-setup.md.';
+const outdatedBackend = (site: string) =>
+  `The backend at ${site} does not support email/password login. Deploy the current Convex functions to it.`;
+const messages: Record<string, string | ((site: string) => string)> = {
+  INVALID_EMAIL_OR_PASSWORD: `Invalid email or password. ${passwordHelp}`,
+  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: `An account with this email already exists. Sign in instead. ${passwordHelp}`,
+  EMAIL_PASSWORD_DISABLED: outdatedBackend,
+  EMAIL_PASSWORD_SIGN_UP_DISABLED: outdatedBackend,
+  404: outdatedBackend,
+  429: 'Too many attempts. Wait a few minutes and try again.',
+};
 export class PasswordSession implements SessionAuth {
   private jwt?: { value: string; expiresAt: number };
   constructor(
@@ -54,11 +66,14 @@ export class PasswordSession implements SessionAuth {
         `Login configuration is incomplete on ${this.siteURL}. Add ${browser.runtime.getURL('').replace(/\/$/, '')} to AUTH_TRUSTED_ORIGINS.`,
       );
     }
-    if (!response.ok)
-      throw new Error(
-        response.status === 401 && token ? signInRequired : (data.message ?? 'Sign-in failed.'),
-      );
-    return { data, response };
+    if (response.ok) return { data, response };
+    if (response.status === 401 && token) throw new Error(signInRequired);
+    const message = messages[data.code] ?? messages[response.status];
+    throw new Error(
+      typeof message === 'function'
+        ? message(this.siteURL)
+        : (message ?? data.message ?? 'Sign-in failed.'),
+    );
   }
   signIn(credentials: Credentials): Promise<Account> {
     return debug.trace('auth.signIn', () => this.signInImpl(credentials));

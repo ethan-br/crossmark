@@ -80,8 +80,26 @@ it('reports rejected credentials without storing a session', async () => {
       { status: 401 },
     ),
   );
-  await expect(session().signIn(credentials)).rejects.toThrow('Invalid email or password');
+  await expect(session().signIn(credentials)).rejects.toThrow(
+    /Invalid email or password\. Accounts created with Google sign-in/,
+  );
   expect(mocks.storage.authSession).toBeUndefined();
+});
+it.each([
+  ['EMAIL_PASSWORD_DISABLED', 400],
+  ['EMAIL_PASSWORD_SIGN_UP_DISABLED', 400],
+  [undefined, 404],
+])('asks for a backend deploy when it predates email/password: %s', async (code, status) => {
+  fetchMock.mockResolvedValue(Response.json({ code }, { status }));
+  await expect(session().signIn(credentials)).rejects.toThrow(
+    'The backend at https://backend.convex.site does not support email/password login. Deploy the current Convex functions',
+  );
+});
+it('explains rate limiting', async () => {
+  fetchMock.mockResolvedValue(
+    Response.json({ message: 'Too many requests. Please try again later.' }, { status: 429 }),
+  );
+  await expect(session().signIn(credentials)).rejects.toThrow('Too many attempts');
 });
 it('requires both an email and a password before contacting the backend', async () => {
   await expect(session().signIn({ email: ' ', password: 'x' })).rejects.toThrow('Enter your email');

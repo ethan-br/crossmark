@@ -392,7 +392,8 @@ export class Engine {
         delayMs: Math.max(0, state.nextRetryAt - Date.now()),
       });
       state.status =
-        error instanceof TypeError || /fetch|network|connection|offline/i.test(String(error))
+        error instanceof TypeError ||
+        /fetch|network|connection|offline|Could not reach/i.test(String(error))
           ? 'offline'
           : 'error';
       state.needsSignIn = /Unauthenticated|Sign in to continue/i.test(String(error));
