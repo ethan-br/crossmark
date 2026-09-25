@@ -97,7 +97,7 @@ export function applyOperation(
 // Title/URL edits, reorders within a folder, stale edits to tombstones and
 // no-op creates are not structural changes and produce no activity.
 export function activityKind(
-  kind: string,
+  kind: Operation['kind'],
   before?: Node,
   after?: Node,
 ): Exclude<ActivityKind, 'synced'> | undefined {

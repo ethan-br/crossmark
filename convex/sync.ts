@@ -136,7 +136,7 @@ export const snapshot = query({
       .take(500);
     const changes: Activity[] = [];
     for (const h of history) {
-      const kind = activityKind(h.kind, h.before, h.after);
+      const kind = activityKind(h.kind as Operation['kind'], h.before, h.after);
       if (kind) changes.push({ id: h._id, kind, title: h.title, at: h.at });
     }
     const syncs: Activity[] = devices
@@ -227,11 +227,26 @@ export const checkpoint = mutation({
       cursor > (collection?.revision ?? 0)
     )
       fail('Invalid checkpoint.');
+    // A browser syncs when it applies revisions from elsewhere, not only its own pushes.
+    // Revision 1 is the collection seed, which has no operation row.
+    const received =
+      cursor > device.cursor &&
+      ((device.cursor === 0 && collection!.sourceDevice !== device.installationId) ||
+        !!(await ctx.db
+          .query('operations')
+          .withIndex('by_collection', (q) =>
+            q
+              .eq('collectionId', device.collectionId)
+              .gt('revision', device.cursor)
+              .lte('revision', cursor),
+          )
+          .filter((q) => q.neq(q.field('deviceId'), device._id))
+          .first()));
     const now = Date.now();
     await ctx.db.patch(device._id, {
       cursor,
       lastSeen: now,
-      ...(cursor > device.cursor ? { lastSync: now } : {}),
+      ...(received ? { lastSync: now } : {}),
     });
   },
 });

@@ -187,12 +187,63 @@ it('limits activity to structural changes and browser syncs', async () => {
   ]);
   await t.mutation(api.sync.checkpoint, { deviceId, cursor: snapshot.revision });
   snapshot = await t.query(api.sync.snapshot, { deviceId });
-  expect(snapshot.activity[0]).toMatchObject({ kind: 'synced', title: 'First' });
+  expect(snapshot.activity.filter((a) => a.kind === 'synced')).toEqual([]);
+  const second = await t.mutation(api.sync.connect, {
+    installationId: crypto.randomUUID(),
+    name: 'Second',
+    browser: 'Firefox',
+    nodes: [],
+  });
+  await t.mutation(api.sync.checkpoint, {
+    deviceId: second.deviceId,
+    cursor: snapshot.revision,
+  });
+  snapshot = await t.query(api.sync.snapshot, { deviceId });
+  expect(snapshot.activity[0]).toMatchObject({ kind: 'synced', title: 'Second' });
   expect(Object.keys(snapshot.activity[0]).sort()).toEqual(['at', 'id', 'kind', 'title']);
   const synced = snapshot.activity[0].at;
-  await t.mutation(api.sync.checkpoint, { deviceId, cursor: snapshot.revision });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await t.mutation(api.sync.checkpoint, {
+    deviceId: second.deviceId,
+    cursor: snapshot.revision,
+  });
   snapshot = await t.query(api.sync.snapshot, { deviceId });
   expect(snapshot.activity.filter((a) => a.kind === 'synced')).toEqual([
-    expect.objectContaining({ at: synced }),
+    expect.objectContaining({ title: 'Second', at: synced }),
   ]);
+});
+
+it('marks a browser synced only when it applies changes from elsewhere', async () => {
+  const { t, deviceId } = await setup();
+  await t.mutation(api.sync.checkpoint, { deviceId, cursor: 1 });
+  const second = await t.mutation(api.sync.connect, {
+    installationId: crypto.randomUUID(),
+    name: 'Second',
+    browser: 'Firefox',
+    nodes: [],
+  });
+  await t.mutation(api.sync.checkpoint, { deviceId: second.deviceId, cursor: 1 });
+  const synced = async () =>
+    (await t.query(api.sync.snapshot, { deviceId })).activity
+      .filter((a) => a.kind === 'synced')
+      .map(({ title, at }) => ({ title, at }));
+  const [joined] = await synced();
+  expect(joined.title).toBe('Second');
+  await t.mutation(api.sync.push, {
+    deviceId: second.deviceId,
+    operations: [
+      {
+        id: 'move',
+        sequence: 1,
+        nodeId: 'a',
+        baseRevision: 1,
+        kind: 'update',
+        fields: { parentId: 'other' },
+      },
+    ],
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await t.mutation(api.sync.checkpoint, { deviceId: second.deviceId, cursor: 2 });
+  await t.mutation(api.sync.checkpoint, { deviceId, cursor: 2 });
+  expect(await synced()).toEqual([{ title: 'First', at: expect.any(Number) }, joined]);
 });
