@@ -158,6 +158,114 @@ describe('two-browser synchronization and recovery', () => {
     expect((await ready(a)).snapshot!.revision).toBe(original.revision);
   });
 
+  it('syncs portable roots through dual Chrome trees and root ID churn', async () => {
+    const { device } = await setup();
+    const firefox = device('Firefox', 'Firefox');
+    await firefox.native.create({
+      parentId: 'toolbar_____',
+      title: 'Toolbar item',
+      url: 'https://toolbar.example',
+    });
+    await firefox.native.create({
+      parentId: 'menu________',
+      title: 'Menu item',
+      url: 'https://menu.example',
+    });
+    await firefox.engine.command({ type: 'connect', name: 'Firefox' });
+    const chrome = device('Chrome', 'Chrome');
+    chrome.native.nodes = [
+      { id: '1', title: 'Local toolbar', folderType: 'bookmarks-bar', syncing: false },
+      { id: '2', title: 'Local other', folderType: 'other', syncing: false },
+      { id: '5', title: 'Account toolbar', folderType: 'bookmarks-bar', syncing: true },
+      { id: '6', title: 'Account other', folderType: 'other', syncing: true },
+      { id: '7', title: 'Speed Dial' },
+    ];
+    await chrome.native.create({
+      parentId: '1',
+      title: 'Local only',
+      url: 'https://local.example',
+    });
+    await chrome.engine.command({ type: 'connect', name: 'Chrome' });
+    let state = await ready(chrome);
+    expect(state.roots).toMatchObject({ toolbar: '5', other: '6' });
+    expect(chrome.native.nodes.find((n) => n.url === 'https://toolbar.example')?.parentId).toBe(
+      '5',
+    );
+    const menu = chrome.native.nodes.find((n) => n.title === 'Bookmarks Menu')!;
+    expect(menu.parentId).toBe('6');
+    expect(chrome.native.nodes.find((n) => n.url === 'https://menu.example')?.parentId).toBe(
+      menu.id,
+    );
+    expect(chrome.native.nodes.find((n) => n.url === 'https://local.example')?.parentId).toBe('1');
+    chrome.native.nodes.find((n) => n.id === '5')!.id = '50';
+    chrome.native.nodes.find((n) => n.id === '6')!.id = '60';
+    for (const node of chrome.native.nodes) {
+      if (node.parentId === '5') node.parentId = '50';
+      if (node.parentId === '6') node.parentId = '60';
+    }
+    state = await ready(chrome);
+    expect(state.roots).toMatchObject({ toolbar: '50', other: '60', menu: menu.id });
+    expect(state.outbox).toHaveLength(0);
+    expect(chrome.native.nodes.filter((n) => n.title === 'Bookmarks Menu')).toHaveLength(1);
+    expect((await ready(firefox)).snapshot!.nodes).toHaveLength(2);
+  });
+
+  it('keeps legacy cloud mobile descendants from blocking portable projection', async () => {
+    const { t, device } = await setup();
+    const firefox = device('Firefox', 'Firefox');
+    await firefox.native.create({
+      parentId: 'toolbar_____',
+      title: 'Portable',
+      url: 'https://portable.example',
+    });
+    await firefox.engine.command({ type: 'connect', name: 'Firefox' });
+    const id = (await firefox.store.read()).deviceId as never;
+    await t.mutation(api.sync.push, {
+      deviceId: id,
+      operations: [
+        {
+          id: 'mobile-folder-op',
+          sequence: 1,
+          nodeId: 'mobile-folder',
+          baseRevision: 0,
+          kind: 'create',
+          node: {
+            id: 'mobile-folder',
+            kind: 'folder',
+            parentId: 'mobile',
+            title: 'Phone',
+            order: 0,
+            revision: 0,
+          },
+        },
+        {
+          id: 'mobile-bookmark-op',
+          sequence: 2,
+          nodeId: 'mobile-bookmark',
+          baseRevision: 0,
+          kind: 'create',
+          node: {
+            id: 'mobile-bookmark',
+            kind: 'bookmark',
+            parentId: 'mobile-folder',
+            title: 'Phone link',
+            url: 'https://phone.example',
+            order: 0,
+            revision: 0,
+          },
+        },
+      ],
+    });
+    const chrome = device('Chrome', 'Chrome');
+    await chrome.engine.command({ type: 'connect', name: 'Chrome' });
+    const state = await ready(chrome);
+    expect(state.snapshot!.nodes).toHaveLength(3);
+    expect(chrome.native.nodes.filter((n) => n.url).map((n) => n.url)).toEqual([
+      'https://portable.example',
+    ]);
+    expect(chrome.native.nodes.some((n) => n.title === 'Mobile Bookmarks')).toBe(false);
+  });
+
   it('merges duplicate local folders and moves their new children before deleting surplus folders', async () => {
     const { a, device } = await connectPair();
     const b = device('Joining');

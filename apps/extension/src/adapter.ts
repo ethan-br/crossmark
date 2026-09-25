@@ -35,83 +35,122 @@ export class Adapter {
     const tree = await this.api.getTree();
     const roots = tree[0]?.children ?? [];
     const discovered: Record<string, string> = {};
-    for (const n of roots) {
-      if (n.unmodifiable || n.folderType === 'managed') continue;
-      let key: string | undefined;
-      if (this.firefox)
-        key = (
-          {
-            toolbar_____: 'toolbar',
-            unfiled_____: 'other',
-            menu________: 'menu',
-            mobile______: 'mobile',
-          } as Record<string, string>
-        )[n.id];
-      else
-        key =
-          (
-            {
-              'bookmarks-bar': 'toolbar',
-              bookmarks_bar: 'toolbar',
-              other: 'other',
-              mobile: 'mobile',
-            } as Record<string, string>
-          )[n.folderType ?? ''] ??
-          ({ '1': 'toolbar', '2': 'other', '3': 'mobile' } as Record<string, string>)[n.id];
-      if (!key)
-        throw new Error(
-          'This browser exposes an unsupported bookmark root. Sync is paused to keep your bookmarks safe.',
+    const rootSyncing: Record<string, boolean> = {};
+    const available = roots.filter((n) => !n.unmodifiable && n.folderType !== 'managed');
+    if (this.firefox) {
+      for (const [key, id] of [
+        ['toolbar', 'toolbar_____'],
+        ['other', 'unfiled_____'],
+        ['menu', 'menu________'],
+      ]) {
+        if (available.some((n) => n.id === id)) discovered[key] = id;
+      }
+    } else {
+      const previousSyncing = { ...state.rootSyncing };
+      if (state.rootSignature) {
+        try {
+          const signature: unknown = JSON.parse(state.rootSignature);
+          if (Array.isArray(signature))
+            for (const entry of signature)
+              if (
+                Array.isArray(entry) &&
+                typeof entry[0] === 'string' &&
+                typeof entry[2] === 'boolean'
+              )
+                for (const key of ['toolbar', 'other'])
+                  if (state.roots[key] === entry[0] && previousSyncing[key] === undefined)
+                    previousSyncing[key] = entry[2];
+        } catch {
+          // An old signature cannot prevent a safe metadata-based remap.
+        }
+      }
+      for (const key of ['toolbar', 'other']) {
+        const prior = available.find((n) => n.id === state.roots[key]);
+        if (previousSyncing[key] === undefined && prior?.syncing !== undefined)
+          previousSyncing[key] = prior.syncing;
+      }
+      const expectedSyncing = previousSyncing.toolbar ?? previousSyncing.other;
+      if (
+        previousSyncing.toolbar !== undefined &&
+        previousSyncing.other !== undefined &&
+        previousSyncing.toolbar !== previousSyncing.other
+      )
+        throw new Error('The bookmark toolbar and Other belong to different collections.');
+      for (const [key, types] of [
+        ['toolbar', ['bookmarks-bar', 'bookmarks_bar']],
+        ['other', ['other']],
+      ] as const) {
+        const candidates = available.filter((n) =>
+          (types as readonly string[]).includes(n.folderType ?? ''),
         );
-      if (discovered[key])
+        const prior = candidates.find((n) => n.id === state.roots[key]);
+        const sameCollection = candidates.filter((n) => n.syncing === expectedSyncing);
+        const preferred = candidates.filter((n) => n.syncing === true);
+        const selected =
+          prior ??
+          (expectedSyncing !== undefined && sameCollection.length === 1
+            ? sameCollection[0]
+            : preferred.length === 1
+              ? preferred[0]
+              : candidates.length === 1
+                ? candidates[0]
+                : undefined);
+        if (!selected && candidates.length)
+          throw new Error('Multiple bookmark roots of the same type are ambiguous.');
+        if (selected) {
+          if (expectedSyncing !== undefined && selected.syncing !== expectedSyncing)
+            throw new Error(
+              'The selected bookmark collection is unavailable. Sync is paused to protect its contents.',
+            );
+          discovered[key] = selected.id;
+          if (selected.syncing !== undefined) rootSyncing[key] = selected.syncing;
+        }
+      }
+      if (
+        rootSyncing.toolbar !== undefined &&
+        rootSyncing.other !== undefined &&
+        rootSyncing.toolbar !== rootSyncing.other
+      )
+        throw new Error('The bookmark toolbar and Other belong to different collections.');
+      const other = available.find((n) => n.id === discovered.other);
+      const menuFolders = (other?.children ?? []).filter(
+        (n) => !n.url && !n.unmodifiable && n.title === 'Bookmarks Menu',
+      );
+      const mapped = (other?.children ?? []).find(
+        (n) => n.id === state.roots.menu && !n.url && !n.unmodifiable,
+      );
+      const menu = mapped ?? (menuFolders.length === 1 ? menuFolders[0] : undefined);
+      if (!menu && menuFolders.length > 1)
+        throw new Error('Multiple Bookmarks Menu folders under Other are ambiguous.');
+      if (menu) discovered.menu = menu.id;
+      else if (state.roots.menu && (state.connected || state.registrationPending))
         throw new Error(
-          'Multiple local and account bookmark roots detected. Choose one native bookmark collection before connecting this v0.',
+          'A mapped bookmark root was removed. Sync is paused to protect its contents.',
         );
-      discovered[key] = n.id;
     }
-    if (!discovered.toolbar || !discovered.other)
+    if (!discovered.toolbar || !discovered.other || (this.firefox && !discovered.menu))
       throw new Error(
         'Your bookmark roots are unavailable. Reconnect after restoring your browser profile.',
       );
-    const signature = JSON.stringify(
+    // Keep an older mobile mapping only to avoid importing its wrapper as a normal folder.
+    const oldMobile =
+      !this.firefox &&
       roots
-        .filter((n) => !n.unmodifiable && n.folderType !== 'managed')
-        .map((n) => [n.id, n.folderType, n.syncing])
-        .sort(),
-    );
-    if (state.rootSignature && state.rootSignature !== signature)
-      throw new Error(
-        'Your native bookmark roots changed. Export your collection and reconnect this browser to review it safely.',
-      );
-    state.rootSignature = signature;
-    // Synthetic menu/mobile folders have a durable mapping but are not canonical user nodes.
-    const extra = Object.fromEntries(Object.entries(state.roots).filter(([k]) => !discovered[k]));
-    const nativeIds = new Set<string>();
-    const collect = (n: NativeNode) => {
-      nativeIds.add(n.id);
-      for (const child of n.children ?? []) collect(child);
-    };
-    for (const n of tree) collect(n);
-    for (const [key, id] of Object.entries(extra))
-      if (!nativeIds.has(id)) {
-        if (!state.connected && !state.registrationPending) delete extra[key];
-        else
-          throw new Error(
-            'A mapped bookmark root was removed. Reconnect this browser to review its collection safely.',
-          );
-      }
-    state.roots = { ...extra, ...discovered };
+        .find((n) => n.id === discovered.other)
+        ?.children?.find(
+          (n) => n.id === state.roots.mobile && n.title === 'Mobile Bookmarks' && !n.url,
+        )?.id;
+    state.roots = discovered;
+    if (oldMobile) state.roots.mobile = oldMobile;
+    if (!this.firefox) state.rootSyncing = rootSyncing;
+    delete state.rootSignature;
     const byNative = new Map(Object.entries(state.mappings).map(([id, native]) => [native, id]));
     const previous = new Map(state.baseline.map((n) => [n.id, n]));
     const result: Node[] = [];
     const visit = (native: NativeNode, parentId: string) => {
       if (native.unmodifiable) return;
-      const synthetic = Object.entries(state.roots).find(
-        ([key, id]) => id === native.id && !discovered[key],
-      );
-      if (synthetic) {
-        for (const child of native.children ?? []) visit(child, synthetic[0]);
-        return;
-      }
+      if (!this.firefox && native.id === discovered.menu) return;
+      if (native.id === oldMobile) return;
       let id = byNative.get(native.id);
       if (!id) {
         id = crypto.randomUUID();
@@ -129,28 +168,36 @@ export class Adapter {
       });
       for (const child of native.children ?? []) visit(child, id);
     };
-    for (const [key, id] of Object.entries(discovered))
-      for (const child of roots.find((n) => n.id === id)?.children ?? []) visit(child, key);
+    for (const [key, id] of Object.entries(discovered)) {
+      const root =
+        key === 'menu' && !this.firefox
+          ? roots.find((n) => n.id === discovered.other)?.children?.find((n) => n.id === id)
+          : roots.find((n) => n.id === id);
+      for (const child of root?.children ?? []) visit(child, key);
+    }
     return result;
   }
   async ensureRoots(state: State, store: Store, nodes: Node[]) {
-    for (const key of ['menu', 'mobile'])
-      if (!state.roots[key] && nodes.some((n) => !n.deleted && n.parentId === key)) {
-        // Root creation uses the same crash journal as a regular folder.
-        const target: Node = {
-          id: key,
-          kind: 'folder',
-          parentId: 'other',
-          order: 999999,
-          title: key === 'menu' ? 'Bookmarks Menu' : 'Mobile Bookmarks',
-          revision: 0,
-        };
-        await this.write(state, store, { kind: 'create', target });
-        await store.write(state);
-      }
+    if (
+      !this.firefox &&
+      !state.roots.menu &&
+      nodes.some((n) => !n.deleted && n.parentId === 'menu')
+    ) {
+      // Root creation uses the same crash journal as a regular folder.
+      const target: Node = {
+        id: 'menu',
+        kind: 'folder',
+        parentId: 'other',
+        order: 999999,
+        title: 'Bookmarks Menu',
+        revision: 0,
+      };
+      await this.write(state, store, { kind: 'create', target });
+      await store.write(state);
+    }
   }
   projected(n: Node) {
-    return this.firefox || n.kind !== 'separator';
+    return n.parentId !== 'mobile' && (this.firefox || n.kind !== 'separator');
   }
   recover(state: State, store: Store) {
     return debug.trace('bookmarks.recover', () => this.recoverImpl(state, store));

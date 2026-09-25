@@ -38,6 +38,7 @@ export interface State {
   nextRetryAt?: number;
   backup?: Node[];
   rootSignature?: string;
+  rootSyncing?: Record<string, boolean>;
 }
 export const initialState = (): State => ({
   version: 2,

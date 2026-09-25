@@ -24,9 +24,9 @@ Before each native write the engine rereads the tree. Unexpected differences are
 
 ## Browser roots
 
-Chromium uses `folderType` when available, with known root IDs as a fallback. Firefox uses stable native root IDs. Managed roots are excluded. Duplicate account/local logical roots, unknown roots, disappearing roots, and changing account-root signatures stop reconciliation to avoid treating an unavailable tree as deletions.
+Chromium maps `bookmarks-bar` and `other` by `folderType`. Where local and account trees coexist, it selects the account pair and retains that selection while those roots exist. Root IDs can change without reconnecting; switching from a selected account tree to a local tree pauses sync. Firefox maps its stable toolbar, unfiled, and menu IDs. Unsupported top-level roots, managed roots, and browser-specific collections are ignored.
 
-Firefox menu/mobile nodes map to native roots. Chromium creates mapped folders under Other when a canonical root is not natively available. Synthetic root creation is journaled. Removing a synthetic root also pauses reconciliation. Firefox separators remain in the canonical collection and are omitted from Chromium's projection; omission does not generate a delete.
+The Chromium folder named “Bookmarks Menu” directly under the selected Other root maps to the canonical menu root. An existing folder is adopted; one is created with a journal only when menu content needs it. A missing mapped menu folder pauses sync while connected. Mobile is outside the portable sync scope: mobile roots and their descendants are neither captured nor projected, and mobile content already in a cloud snapshot does not block the three portable roots. Firefox separators remain in the canonical collection and are omitted from Chromium's projection.
 
 ## Lifecycle
 
