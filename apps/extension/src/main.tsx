@@ -328,8 +328,9 @@ function App() {
                   </span>
                 </div>
                 <p className="cm-secondary cm-source-note">
-                  Your first installation initializes the collection. Additional browsers require
-                  approval before merging existing bookmarks.
+                  Your first installation initializes the collection. Additional browsers replace
+                  local bookmarks with the saved collection, even when it is empty. Export retains
+                  the earlier local tree.
                 </p>
                 <div className="cm-actions">
                   <button className="cm-primary" disabled={busy}>

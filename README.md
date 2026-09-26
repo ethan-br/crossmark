@@ -59,7 +59,7 @@ WXT opens the extension in a disposable browser profile and reloads it as files 
 
 **A Google OAuth web client has not been created yet.** The extension installs and opens, but Google sign-in requires backend configuration. Follow [the setup guide](docs/google-oauth-setup.md) to create the client, configure Convex secrets and trusted origins, and test the complete login flow. Do not put the Google client secret in a `VITE_` or `WXT_` variable or extension file.
 
-Sign in with the same Google account in each browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically. Additional browsers replace their existing user bookmarks under the portable roots with the cloud collection automatically. The previous local snapshot is included in the recovery export. Signing out does not delete native bookmarks or the account's server collection.
+Sign in with the same Google account in each browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically. Additional browsers replace their existing user bookmarks under the [portable roots](docs/v0-decisions.md#initialization-and-joining) with the cloud collection automatically, including when that collection is empty. The previous local snapshot is included in the recovery export. Signing out does not delete native bookmarks or the account's server collection.
 
 Use one Crossmark installation per independently native-synced collection. Connecting installations already exchanging bookmarks through a browser vendor's sync can introduce duplicates.
 

@@ -198,6 +198,49 @@ describe('two-browser synchronization and recovery', () => {
     expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
     await ready(b);
   });
+  it('replaces local bookmarks with an empty cloud collection and retains the recovery export', async () => {
+    const { device } = await setup();
+    const a = device('Empty first'),
+      b = device('Populated second');
+    await a.engine.command({ type: 'connect', name: 'Empty first' });
+    await b.native.create({ parentId: '1', title: 'First local', url: 'https://local.example/1' });
+    await b.native.create({ parentId: '2', title: 'Second local', url: 'https://local.example/2' });
+    await b.engine.command({ type: 'connect', name: 'Populated second' });
+    const state = await ready(b);
+    expect(state.snapshot?.nodes).toEqual([]);
+    expect(state.status).toBe('ready');
+    expect(b.native.nodes.filter((n) => n.url)).toEqual([]);
+    const exported = (await b.engine.command({ type: 'export' })) as {
+      localRecovery: { url?: string }[];
+    };
+    expect(exported.localRecovery.map((n) => n.url).sort()).toEqual([
+      'https://local.example/1',
+      'https://local.example/2',
+    ]);
+  });
+  it('includes a bookmark created during installation in the local replacement pass', async () => {
+    const { device } = await setup();
+    const a = device('First'),
+      b = device('Second');
+    await a.native.create({ parentId: '1', title: 'Cloud', url: 'https://cloud.example' });
+    await a.engine.command({ type: 'connect', name: 'First' });
+    const create = b.native.create.bind(b.native);
+    let inject = true;
+    b.native.create = async (details) => {
+      const result = await create(details);
+      if (inject && details.url === 'https://cloud.example') {
+        inject = false;
+        await create({ parentId: '1', title: 'During install', url: 'https://during.example' });
+      }
+      return result;
+    };
+    await b.engine.command({ type: 'connect', name: 'Second' });
+    expect((await ready(b)).status).toBe('ready');
+    expect(b.native.nodes.filter((n) => n.url).map((n) => n.url)).toEqual([
+      'https://cloud.example',
+    ]);
+    expect((await ready(a)).snapshot!.nodes).toHaveLength(1);
+  });
   it('propagates create, rename, move, reorder and delete without echoes', async () => {
     const { a, b } = await connectPair();
     const f = await a.native.create({ title: 'Work', parentId: '1' });

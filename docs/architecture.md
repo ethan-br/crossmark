@@ -14,7 +14,7 @@ Google is the only configured provider. The browser identity API launches OAuth,
 
 ## Native application and recovery
 
-Canonical IDs are independent of native IDs and URLs. Intentional duplicate URLs survive seeding and ordinary edits. A later installation stores its local snapshot for recovery, then replaces user bookmarks under the portable roots with the cloud collection. It does not import local content into the cloud. The initial snapshot is stored before registration, allowing an interrupted first registration to retry with the same installation ID, account and baseline. Subsequent native edits are then diffed rather than mistaken for part of the uploaded seed.
+Canonical IDs are independent of native IDs and URLs. Intentional duplicate URLs survive seeding and ordinary edits. A later installation stores its local snapshot for recovery, then replaces user bookmarks under the [portable roots](v0-decisions.md#initialization-and-joining) with the cloud collection. It does not import local content into the cloud. The initial snapshot is stored before registration, allowing an interrupted first registration to retry with the same installation ID, account and baseline. Subsequent native edits are then diffed rather than mistaken for part of the uploaded seed.
 
 Every native mutation has a persisted journal. A create journal stores the intended node and the parent's pre-write child IDs. After restart, a single matching newly appearing child is adopted; ambiguous candidates stop synchronization. Update, move, and delete are replayed idempotently. Expected index shifts update the baseline, so native reorder echoes do not generate redundant remote writes.
 

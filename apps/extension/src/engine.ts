@@ -368,8 +368,8 @@ export class Engine {
       const current = await this.adapter.read(state);
       if (diff(state.baseline, current, state.sequence).length === 0) return true;
       if (state.joining) {
-        // A concurrent native edit during installation stays local and is
-        // included in the next journaled pass, never sent as a cloud change.
+        // Include concurrent native edits in the replacement baseline. The
+        // next journaled pass removes nodes absent from the cloud target.
         state.baseline = current;
         await this.save(state);
       }

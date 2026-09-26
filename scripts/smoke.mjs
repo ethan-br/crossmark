@@ -35,9 +35,9 @@ try {
   assert.ok(!('token' in state));
   assert.equal(await page.locator('input').count(), 1);
   await page.getByRole('button', { name: 'Sign in with Google', exact: true }).click();
-  await expect(
-    page.getByText('Google login is not configured on the backend.', { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText(
+    /Google login is not configured on the backend|Failed to fetch/,
+  );
   assert.equal((await command({ type: 'state' })).data.connected, false);
   assert.equal(
     (await worker.evaluate(() => chrome.bookmarks.search({ title: 'Native bookmark' }))).length,
@@ -67,12 +67,12 @@ try {
           'Built extension startup',
           'Native bookmark read',
           'Google-only sign-in UI',
-          'Missing OAuth configuration reported',
+          'Unavailable or unconfigured backend reported',
           'No bookmark changes without login',
           'Credential-free export',
           'Popup reload',
         ],
-        liveGoogleLogin: 'Not tested: Google OAuth client not configured',
+        liveGoogleLogin: 'Not tested: backend unavailable or Google OAuth client not configured',
       },
       null,
       2,

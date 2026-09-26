@@ -58,8 +58,8 @@ try {
   await driver.findElement(By.xpath('//button[normalize-space(.)="Sign in with Google"]')).click();
   await driver.wait(
     async () =>
-      (await driver.findElement(By.css('body')).getText()).includes(
-        'Google login is not configured on the backend.',
+      /Google login is not configured on the backend|Failed to fetch|NetworkError/.test(
+        await driver.findElement(By.css('body')).getText(),
       ),
     15000,
   );
@@ -94,12 +94,12 @@ try {
           'Built extension startup',
           'Native menu and separator read',
           'Google-only sign-in UI',
-          'Missing OAuth configuration reported',
+          'Unavailable or unconfigured backend reported',
           'No bookmark changes without login',
           'Credential-free export',
           'Popup reload',
         ],
-        liveGoogleLogin: 'Not tested: Google OAuth client not configured',
+        liveGoogleLogin: 'Not tested: backend unavailable or Google OAuth client not configured',
       },
       null,
       2,

@@ -86,6 +86,12 @@ describe('Convex authorization and durable operations', () => {
     expect((await t.query(api.sync.snapshot, { deviceId: second.deviceId })).nodes).toEqual([
       { ...node, revision: 1, deleted: false },
     ]);
+    await expect(
+      t.mutation(api.sync.join, { deviceId: second.deviceId, nodes: [node] }),
+    ).rejects.toThrow('Update Crossmark');
+    expect((await t.query(api.sync.snapshot, { deviceId: second.deviceId })).nodes).toEqual([
+      { ...node, revision: 1, deleted: false },
+    ]);
   });
   it('deduplicates repeated upload after lost acknowledgment', async () => {
     const { t, deviceId } = await setup();

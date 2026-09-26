@@ -81,6 +81,15 @@ export const connect = mutation({
     return { deviceId, joining };
   },
 });
+// Previous extension builds still call this after their merge review. Fail
+// clearly instead of allowing that client to import local bookmarks.
+export const join = mutation({
+  args: { deviceId: v.id('devices'), nodes: v.array(node) },
+  handler: async (ctx, { deviceId }) => {
+    await authenticate(ctx, deviceId);
+    return fail('Update Crossmark before joining this collection.');
+  },
+});
 export const snapshot = query({
   args: { deviceId: v.id('devices') },
   handler: async (ctx, { deviceId }) => {
