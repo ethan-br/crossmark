@@ -21,17 +21,13 @@ export interface Operation {
   node?: Node;
   fields?: Partial<Fields>;
 }
+export type ActivityKind = 'added' | 'removed' | 'moved' | 'synced';
 export interface Activity {
   id: string;
-  nodeId: string;
+  kind: ActivityKind;
+  /** Bookmark or folder title, or the browser name for `synced`. */
   title: string;
-  kind: Operation['kind'];
-  device: string;
   at: number;
-  conflict: boolean;
-  before?: Node;
-  after?: Node;
-  attempted?: Node;
 }
 export interface Device {
   id: string;

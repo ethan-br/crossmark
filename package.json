@@ -23,8 +23,7 @@
     "postinstall": "wxt prepare",
     "build:chromium": "npm run typecheck && wxt build",
     "build:firefox": "npm run typecheck && wxt build -b firefox",
-    "test:debug": "node scripts/debug-smoke.mjs",
-    "test:firefox-auth": "node scripts/firefox-auth-smoke.mjs"
+    "test:debug": "node scripts/debug-smoke.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -33,7 +32,7 @@
     "@convex-dev/better-auth": "^0.12.5",
     "better-auth": "1.6.33",
     "convex": "^1.31.0",
-    "lucide-react": "^0.468.0",
+    "lucide-react": "^1.47.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "webextension-polyfill": "^0.12.0"
@@ -48,9 +47,9 @@
     "convex-test": "^0.0.41",
     "prettier": "^3.9.8",
     "selenium-webdriver": "^4.49.0",
-    "typescript": "^5.9.0",
-    "vite": "^7.1.0",
-    "vitest": "^4.1.11",
+    "typescript": "5.9.3",
+    "vite": "7.3.6",
+    "vitest": "4.1.11",
     "web-ext": "^10.6.0",
     "wxt": "^0.21.4"
   }

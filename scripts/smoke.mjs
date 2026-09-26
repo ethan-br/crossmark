@@ -24,20 +24,19 @@ try {
     }),
   );
   await page.goto(`chrome-extension://${id}/${popup}`);
-  await expect(
-    page.getByRole('button', { name: 'Sign in with Google', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   const command = (message) =>
     page.evaluate((message) => chrome.runtime.sendMessage(message), message);
   const { data: state } = await command({ type: 'state' });
   assert.equal(state.connected, false);
   assert.ok(state.baseline.some((n) => n.title === 'Native bookmark'));
   assert.ok(!('token' in state));
-  assert.equal(await page.locator('input').count(), 1);
-  await page.getByRole('button', { name: 'Sign in with Google', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText(
-    /Google login is not configured on the backend|Failed to fetch/,
-  );
+  assert.equal(await page.locator('input').count(), 3);
+  await page.getByLabel('Email').fill('smoke@example.com');
+  await page.getByLabel('Password').fill('not-a-real-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  // Without a backend the request fails; with one, the unknown account is rejected.
+  await expect(page.getByRole('alert')).toBeVisible();
   assert.equal((await command({ type: 'state' })).data.connected, false);
   assert.equal(
     (await worker.evaluate(() => chrome.bookmarks.search({ title: 'Native bookmark' }))).length,
@@ -47,15 +46,10 @@ try {
   assert.ok(exported.nodes.some((n) => n.title === 'Native bookmark'));
   assert.ok(!('account' in exported) && !('token' in exported));
   await page.reload();
-  await expect(
-    page.getByRole('button', { name: 'Sign in with Google', exact: true }),
-  ).toBeVisible();
-  await page
-    .locator('.cm-window')
-    .screenshot({ path: 'output/verification/chromium-google-login.png' });
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await page.locator('.cm-window').screenshot({ path: 'output/verification/chromium-login.png' });
   const auth = await worker.evaluate(() => ({
     origin: chrome.runtime.getURL('').replace(/\/$/, ''),
-    redirect: chrome.identity.getRedirectURL('auth'),
   }));
   await writeFile(
     'output/verification/chromium-results.json',
@@ -66,13 +60,13 @@ try {
         checks: [
           'Built extension startup',
           'Native bookmark read',
-          'Google-only sign-in UI',
-          'Unavailable or unconfigured backend reported',
+          'Email/password sign-in UI',
+          'Failed sign-in reported',
           'No bookmark changes without login',
           'Credential-free export',
           'Popup reload',
         ],
-        liveGoogleLogin: 'Not tested: backend unavailable or Google OAuth client not configured',
+        liveLogin: 'Not tested: requires a running backend and account',
       },
       null,
       2,

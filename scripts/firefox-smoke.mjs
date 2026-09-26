@@ -54,15 +54,12 @@ try {
     state.baseline.some((n) => n.title === 'Native menu bookmark' && n.parentId === 'menu'),
   );
   assert.ok(state.baseline.some((n) => n.kind === 'separator'));
-  assert.equal((await driver.findElements(By.css('input'))).length, 1);
-  await driver.findElement(By.xpath('//button[normalize-space(.)="Sign in with Google"]')).click();
-  await driver.wait(
-    async () =>
-      /Google login is not configured on the backend|Failed to fetch|NetworkError/.test(
-        await driver.findElement(By.css('body')).getText(),
-      ),
-    15000,
-  );
+  assert.equal((await driver.findElements(By.css('input'))).length, 3);
+  await driver.findElement(By.css('#email')).sendKeys('smoke@example.com');
+  await driver.findElement(By.css('#password')).sendKeys('not-a-real-password');
+  await driver.findElement(By.xpath('//button[normalize-space(.)="Sign in"]')).click();
+  // Without a backend the request fails; with one, the unknown account is rejected.
+  await driver.wait(until.elementLocated(By.css('[role="alert"]')), 15000);
   assert.equal((await command({ type: 'state' })).data.connected, false);
   assert.equal(
     (await fx(() => browser.bookmarks.search({ title: 'Native menu bookmark' }))).length,
@@ -74,13 +71,12 @@ try {
   await driver.navigate().refresh();
   await driver.wait(until.elementLocated(By.css('#browser-name')), 15000);
   await writeFile(
-    'output/verification/firefox-google-login.png',
+    'output/verification/firefox-login.png',
     await driver.findElement(By.css('.cm-window')).takeScreenshot(),
     'base64',
   );
   const auth = await fx(() => ({
     origin: browser.runtime.getURL('').replace(/\/$/, ''),
-    redirect: browser.identity.getRedirectURL('auth'),
   }));
   const firefoxVersion = (await driver.getCapabilities()).get('browserVersion');
   await writeFile(
@@ -93,13 +89,13 @@ try {
         checks: [
           'Built extension startup',
           'Native menu and separator read',
-          'Google-only sign-in UI',
-          'Unavailable or unconfigured backend reported',
+          'Email/password sign-in UI',
+          'Failed sign-in reported',
           'No bookmark changes without login',
           'Credential-free export',
           'Popup reload',
         ],
-        liveGoogleLogin: 'Not tested: backend unavailable or Google OAuth client not configured',
+        liveLogin: 'Not tested: requires a running backend and account',
       },
       null,
       2,

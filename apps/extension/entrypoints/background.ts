@@ -2,7 +2,7 @@ import { defineBackground } from 'wxt/utils/define-background';
 import { debug } from '../src/debug';
 import { configureDebug } from '../src/debug-control';
 import browser, { type Runtime } from 'webextension-polyfill';
-import { GoogleSession } from '../src/auth';
+import { PasswordSession } from '../src/auth';
 import { Adapter } from '../src/adapter';
 import { Engine, type Command } from '../src/engine';
 import { initialState, publicState, type State, type Store } from '../src/state';
@@ -34,7 +34,7 @@ export default defineBackground(() => {
       void badge(state);
     },
     undefined,
-    new GoogleSession(
+    new PasswordSession(
       import.meta.env.VITE_CONVEX_URL || 'http://127.0.0.1:3210',
       import.meta.env.VITE_CONVEX_SITE_URL || 'http://127.0.0.1:3211',
     ),
@@ -109,7 +109,6 @@ export default defineBackground(() => {
     'approve',
     'disconnect',
     'revoke',
-    'restore',
     'export',
   ]);
   browser.runtime.onMessage.addListener((message: unknown, sender: Runtime.MessageSender) => {
@@ -123,12 +122,18 @@ export default defineBackground(() => {
     )
       return false;
     const m = message as Record<string, unknown>;
-    if (m.type === 'connect' && typeof m.name !== 'string')
-      return Promise.resolve({ error: 'Invalid connection request.' });
-    if (
-      (m.type === 'revoke' && typeof m.deviceId !== 'string') ||
-      (m.type === 'restore' && typeof m.activityId !== 'string')
-    )
+    if (m.type === 'connect') {
+      const c = m.credentials as Record<string, unknown> | undefined;
+      if (
+        typeof m.name !== 'string' ||
+        !c ||
+        typeof c.email !== 'string' ||
+        typeof c.password !== 'string' ||
+        (c.create !== undefined && typeof c.create !== 'boolean')
+      )
+        return Promise.resolve({ error: 'Invalid connection request.' });
+    }
+    if (m.type === 'revoke' && typeof m.deviceId !== 'string')
       return Promise.resolve({ error: 'Invalid command.' });
     return engine.command(message as Command).then(
       (data) => ({ data }),

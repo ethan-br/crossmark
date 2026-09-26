@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyOperation, diff } from '../packages/sync-core';
+import { activityKind, applyOperation, diff } from '../packages/sync-core';
 import { type Node, type Operation, validateTree } from '../packages/model';
 const bookmark = (id = 'a', overrides: Partial<Node> = {}): Node => ({
   id,
@@ -92,6 +92,24 @@ describe('canonical synchronization', () => {
     const result = applyOperation(nodes, update({ parentId: 'g' }, { nodeId: 'f' }), 2);
     expect(result.after?.parentId).toBe('other');
     expect(result.conflict).toBe(true);
+  });
+  it('maps only structural changes to activity', () => {
+    const folder = bookmark('f', { kind: 'folder', url: undefined });
+    const separator = bookmark('s', { kind: 'separator', url: undefined, title: '' });
+    expect(activityKind('create', undefined, bookmark())).toBe('added');
+    expect(activityKind('create', bookmark(), bookmark())).toBeUndefined();
+    expect(activityKind('create', undefined, separator)).toBeUndefined();
+    expect(activityKind('delete', folder, { ...folder, deleted: true })).toBe('removed');
+    expect(
+      activityKind('delete', { ...folder, deleted: true }, { ...folder, deleted: true }),
+    ).toBeUndefined();
+    expect(activityKind('update', bookmark(), bookmark('a', { parentId: 'f' }))).toBe('moved');
+    expect(activityKind('update', bookmark(), bookmark('a', { order: 4 }))).toBeUndefined();
+    expect(activityKind('update', bookmark(), bookmark('a', { title: 'New' }))).toBeUndefined();
+    expect(
+      activityKind('update', bookmark('a', { deleted: true }), bookmark('a', { deleted: true })),
+    ).toBeUndefined();
+    expect(activityKind('restore', bookmark('a', { deleted: true }), bookmark())).toBeUndefined();
   });
   it('makes no operations for an unchanged tree', () => {
     expect(diff([bookmark()], [bookmark()], 42)).toEqual([]);

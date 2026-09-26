@@ -29,14 +29,14 @@ jobs:
       VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
       VITE_CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run package
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: extension-packages
           path: |
@@ -61,10 +61,10 @@ jobs:
       VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
       VITE_CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -97,7 +97,7 @@ jobs:
         run: npm run package
       - if: steps.release.outputs.needed == 'true'
         run: node scripts/sign-firefox.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.release.outputs.needed == 'true'
         with:
           name: extension-signed

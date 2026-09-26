@@ -1,6 +1,6 @@
 # Architecture
 
-The popup issues narrowly validated commands to the background. Background code owns a single serialized engine, the private Google-backed session, native mappings, the durable operation queue, and the apply journal. UI status reflects the engine's persisted state. No content scripts are installed.
+The popup issues narrowly validated commands to the background. Background code owns a single serialized engine, the private Better Auth session, native mappings, the durable operation queue, and the apply journal. UI status reflects the engine's persisted state. No content scripts are installed.
 
 WXT discovers the background and popup in `apps/extension/entrypoints` and generates both Manifest V3 extensions. Background initialization runs inside `defineBackground`, with listeners registered synchronously. Browser-specific permissions and identity settings live in `apps/extension/manifest.ts`; the existing browser API polyfill, auth session storage and engine remain shared. See [the WXT migration guide](wxt-migration.md) for build and development details.
 
@@ -10,7 +10,7 @@ Convex mutations atomically authenticate a device, validate operations, update t
 
 Each collection is currently one bounded snapshot document plus devices, operation history and backup tables. This deliberately favors a reviewable implementation over large-scale incremental storage. A snapshot revision is the delivery cursor. A device checkpoint advances only after native projection succeeds. The browser list distinguishes server revision from the last applied device cursor.
 
-Google is the only configured provider. The browser identity API launches OAuth, Better Auth handles the Google callback, and its cross-domain plugin transfers the resulting session back to the extension. The plugin’s internal short-lived handoff is never displayed as an enrollment code and cannot create a session without provider login. Callback origin, path and a per-attempt nonce are checked before exchange. Setup is in [Google OAuth setup](google-oauth-setup.md).
+Email/password is the only login method. The popup sends the email and password to the background in a runtime message; the background posts them to Better Auth's `/sign-in/email` or `/sign-up/email` route and keeps only the returned bearer session token. Passwords are never persisted in extension storage. Setup is in [login setup](auth-setup.md).
 
 ## Native application and recovery
 

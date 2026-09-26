@@ -5,17 +5,16 @@ import type { Id } from '../../../convex/_generated/dataModel';
 import { type Node, type Snapshot, validateTree } from '../../../packages/model';
 import { diff, parentFirst } from '../../../packages/sync-core';
 import { Adapter } from './adapter';
-import type { SessionAuth } from './auth';
+import type { Credentials, SessionAuth } from './auth';
 import { type State, type Store, initialState, publicState } from './state';
 export type Command =
   | { type: 'state' }
-  | { type: 'connect'; name: string }
+  | { type: 'connect'; name: string; credentials: Credentials }
   | { type: 'sync' }
   | { type: 'pause' }
   | { type: 'approve' }
   | { type: 'disconnect' }
   | { type: 'revoke'; deviceId: string }
-  | { type: 'restore'; activityId: string }
   | { type: 'export' };
 export class Engine {
   private serial: Promise<unknown> = Promise.resolve();
@@ -33,7 +32,7 @@ export class Engine {
     this.client = transport ?? this.httpClient!;
   }
   private async authorize() {
-    if (!this.auth) throw new Error('Sign in with Google to continue.');
+    if (!this.auth) throw new Error('Sign in to continue.');
     const token = await this.auth.token();
     this.httpClient?.setAuth(token);
   }
@@ -75,8 +74,8 @@ export class Engine {
           pending: state.outbox,
         };
       if (command.type === 'connect') {
-        if (!this.auth) throw new Error('Sign in with Google to continue.');
-        const account = await this.auth.signIn();
+        if (!this.auth) throw new Error('Sign in to continue.');
+        const account = await this.auth.signIn(command.credentials);
         if (state.account && state.account.id !== account.id) {
           await this.auth.signOut();
           state.needsSignIn = true;
@@ -122,9 +121,8 @@ export class Engine {
         await this.exchange();
         return publicState(await this.store.read());
       }
-      if (!state.deviceId || !state.connected)
-        throw new Error('Sign in with Google to connect this browser.');
-      if (['revoke', 'approve', 'restore'].includes(command.type)) await this.authorize();
+      if (!state.deviceId || !state.connected) throw new Error('Sign in to connect this browser.');
+      if (['revoke', 'approve'].includes(command.type)) await this.authorize();
       if (command.type === 'revoke') {
         await this.client.mutation(api.sync.revoke, {
           deviceId: state.deviceId as Id<'devices'>,
@@ -148,7 +146,7 @@ export class Engine {
         } catch (error) {
           // A remotely revoked installation can still clear its local connection.
           if (
-            !/This browser is disconnected|Unauthenticated|Sign in with Google/.test(String(error))
+            !/This browser is disconnected|Unauthenticated|Sign in to continue/.test(String(error))
           )
             throw error;
         }
@@ -172,37 +170,6 @@ export class Engine {
         });
         state.safetyApproved = true;
         state.status = 'ready';
-        await this.save(state);
-      }
-      if (command.type === 'restore') {
-        const event = state.snapshot?.activity.find((a) => a.id === command.activityId);
-        if (!event?.before) throw new Error('This change has no earlier version to restore.');
-        // Recover a folder and its tombstoned descendants as explicit operations.
-        const source = state.snapshot!.nodes;
-        const restore = [event.attempted ?? event.before];
-        if (event.before.kind === 'folder') {
-          const ids = new Set([event.nodeId]);
-          let added = true;
-          while (added) {
-            added = false;
-            for (const n of source)
-              if (n.deleted && ids.has(n.parentId) && !ids.has(n.id)) {
-                ids.add(n.id);
-                restore.push(n);
-                added = true;
-              }
-          }
-        }
-        for (const n of parentFirst(restore.map((n) => ({ ...n, deleted: false })))) {
-          state.outbox.push({
-            id: crypto.randomUUID(),
-            sequence: ++state.sequence,
-            nodeId: n.id,
-            baseRevision: source.find((x) => x.id === n.id)?.revision ?? 0,
-            kind: 'restore',
-            node: { ...n, deleted: false },
-          });
-        }
         await this.save(state);
       }
       if (!state.paused || command.type === 'sync') {
@@ -334,10 +301,11 @@ export class Engine {
         delayMs: Math.max(0, state.nextRetryAt - Date.now()),
       });
       state.status =
-        error instanceof TypeError || /fetch|network|connection|offline/i.test(String(error))
+        error instanceof TypeError ||
+        /fetch|network|connection|offline|Could not reach/i.test(String(error))
           ? 'offline'
           : 'error';
-      state.needsSignIn = /Unauthenticated|Sign in with Google/i.test(String(error));
+      state.needsSignIn = /Unauthenticated|Sign in to continue/i.test(String(error));
       state.error =
         error instanceof Error
           ? error.message
