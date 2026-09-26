@@ -31,16 +31,17 @@ Complete [login setup](auth-setup.md), build and load both extensions in disposa
    - **Disconnect with unsynced edits.** In Chromium, add a bookmark and immediately disconnect Firefox from Browsers. The new bookmark uploads as part of that action rather than waiting for the next background sync.
    - **Offline pause.** Disable the network, pause a browser, re-enable the network. The other browser shows it as "Paused" after the next sync.
    - The Browsers list shows only each browser's name, the "This browser" tag, and either "Paused", a sync problem (this browser only), or "Last synced …". No browser type, change counts, or "Applied" text appears.
-5. Delete a folder, restore it from Activity, and confirm its descendants return. Export from Settings and check it contains bookmark/recovery data without sessions or credentials.
+5. Delete a folder and confirm Activity shows only `<folder> removed` with a relative time, with no restore action, source browser or path. Export from Settings and check it contains bookmark/recovery data without sessions or credentials.
 6. Create a different test account in a third profile; confirm a separate collection. Reauthentication on an existing installation must reject switching accounts until sign-out.
 7. Disconnect another browser from Browsers; the confirm dialog names it and says its bookmarks stay in that browser. It disappears from the list. Try syncing it; native bookmarks should remain intact. Sign out and sign in again on it to reconnect to the same account's collection.
    - Disconnect this browser from its own Browsers row. The confirm dialog says it will sign out and keep its bookmarks. The popup returns to sign-in, native bookmarks remain, and the other browser no longer lists it. With pending changes, Disconnect refuses until they sync.
 8. End/expire a Better Auth session using the development dashboard. Confirm the extension asks for the password again and retains queued edits. Reauthenticate with the same account and sync them.
 9. Reinstall in a disposable profile and sign in again. Confirm the server collection is not reseeded and merging local bookmarks requires approval.
+10. In Chromium with both local and account bookmark trees, confirm a new installation selects the account toolbar and Other pair. Confirm a connected installation keeps its chosen pair when another appears, then change the selected native root IDs and verify toolbar, other and menu sync continues without reconnecting.
 
 ## Current verification
 
-For the WXT migration, 100 isolated tests, TypeScript and both production builds pass, including from a fresh `npm ci`. The built Chromium and installed Firefox 156 extensions each passed seven headless smoke checks on macOS against an unconfigured-backend HTTP fixture. Chromium debug checks and the Firefox identity/denied-callback fixture passed. Firefox lint reports zero errors and the same four warnings as the old build (minimum-version data collection declarations and bundled React `innerHTML` use).
+For the WXT migration, the isolated suite, TypeScript and both production builds passed, including from a fresh `npm ci`. The built Chromium and installed Firefox 156 extensions each passed seven headless smoke checks on macOS against an unconfigured-backend HTTP fixture. Chromium debug checks and the Firefox identity/denied-callback fixture passed. Firefox lint reports zero errors and the same four warnings as the old build (minimum-version data collection declarations and bundled React `innerHTML` use).
 
 Email/password login replaced Google login after this migration. Successful live login, session renewal, authenticated native browser-to-browser sync and AMO signing were **not exercised by the migration checks**. Follow the manual checklist before release.
 

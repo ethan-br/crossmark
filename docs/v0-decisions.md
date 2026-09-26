@@ -2,7 +2,7 @@
 
 ## Synchronization
 
-Independent fields merge through field patches. Competing updates to the same field follow Convex's serialized commit order; the previous version is retained in history. A stale edit cannot revive a tombstone. Its attempted value is retained and can be explicitly restored. Subtree deletion tombstones the known descendants. A later child addition to a deleted folder is placed in Other. A concurrent move that would produce a cycle also moves the incoming node to Other.
+Independent fields merge through field patches. Competing updates to the same field follow Convex's serialized commit order; the previous version is retained in history. A stale edit cannot revive a tombstone. Its attempted value is retained in server history for investigation. Subtree deletion tombstones the known descendants. A later child addition to a deleted folder is placed in Other. A concurrent move that would produce a cycle also moves the incoming node to Other.
 
 Order is represented by numeric sibling positions, with ID tie-breaking. Destination projections compress positions for unsupported separators while retaining those separators in canonical state. This is a deterministic v0 ordering strategy, not a fractional-position CRDT; simultaneous complex native reorders require more compatibility testing before release.
 
@@ -17,7 +17,8 @@ A nonempty joining browser always stops at review, including after pause/resume 
 The same matching policy applies to every browser:
 
 - Bookmarks match by exact URL string anywhere in the collection, regardless of title or folder. No normalization is performed: different schemes, case, trailing slashes, queries and fragments are distinct URLs. A different title alone is not a new bookmark.
-- Folders match by exact, case-sensitive title under the matched parent, starting at the logical toolbar/other/menu/mobile root. Different paths are distinct folders; new folders, including empty folders, are imported. Children of matched folders use their cloud parent identity.
+- Folders match by exact, case-sensitive title under the matched parent, starting at the logical toolbar/other/menu root. Different paths are distinct folders; new folders, including empty folders, are imported. Children of matched folders use their cloud parent identity. Mobile content is outside portable sync scope.
+- Legacy cloud mobile nodes remain stored but are excluded from join matching, so a portable local bookmark with the same URL imports into its portable root.
 - Existing cloud duplicates are preserved. Local copies first reuse unused matching cloud entries, preferring the same parent and title, then the same parent, then canonical order. Surplus local copies collapse into those matches. Repeated new URLs or folder paths in the joining tree import once; the first in parent-first order supplies their content.
 - Separators match by kind, matched parent and sibling position. Chromium continues to omit separators from its native projection.
 - New nodes append after existing cloud siblings. Tombstones do not match; a locally present URL whose old record was deleted imports with a new identity. Ordinary edits after joining continue to use identities and can intentionally create duplicate URLs.
@@ -32,4 +33,10 @@ Default permissions are bookmarks, local storage, alarms, and the configured Con
 
 The configured local Convex backend is ready to run. A cloud deployment must be created separately and its URL supplied in `.env.local`, followed by a rebuild. No production cloud resource was created by this implementation.
 
-Public release still needs account deletion, request-abuse controls, retention limits and pruning, larger collection storage, signed packages, and the full browser/platform matrix. Server backups currently support investigation; only per-change restore and JSON export are exposed in the UI.
+Public release still needs account deletion, request-abuse controls, retention limits and pruning, larger collection storage, signed packages, and the full browser/platform matrix. Server backups and operation history currently support investigation; only JSON export is exposed in the UI.
+
+Activity is a short, non-diagnostic feed limited to four lines: `<title> added`, `<title> removed`, `<title> moved` and `<browser> synced`, each with a relative timestamp. Only structural changes to bookmarks and folders appear: creates, deletes of live items and moves to a different folder. Title/URL edits, reorders within a folder, stale edits to deleted items and separators are omitted. Rows do not carry the node kind, so added bookmarks and folders share one icon. Each browser contributes one `synced` line, updated when it applies revisions produced by another browser (including the initial collection seed when joining). Uploading its own changes and idle polling do not refresh it. Browsers connected before `lastSync` existed show no `synced` line until they next receive a remote change.
+
+There is no per-change restore and no conflict indicator. When a concurrent or stale edit loses, the other browser's value wins without notice; the losing value remains only in server operation history, which is not exposed to clients or included in the export.
+
+Deploy the Convex schema and `snapshot`/`checkpoint` changes before distributing the extension. The extension hides activity kinds from older backends, so the feed is empty until the server is updated.

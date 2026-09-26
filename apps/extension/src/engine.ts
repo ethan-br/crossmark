@@ -2,7 +2,7 @@ import { debug } from './debug';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
-import { type Node, type Snapshot, validateTree } from '../../../packages/model';
+import { type Node, type Snapshot, portableNodes, validateTree } from '../../../packages/model';
 import { diff, parentFirst } from '../../../packages/sync-core';
 import { Adapter } from './adapter';
 import type { Credentials, SessionAuth } from './auth';
@@ -16,7 +16,6 @@ export type Command =
   | { type: 'approve' }
   | { type: 'disconnect' }
   | { type: 'revoke'; deviceId: string }
-  | { type: 'restore'; activityId: string }
   | { type: 'export' };
 export class Engine {
   private serial: Promise<unknown> = Promise.resolve();
@@ -129,8 +128,7 @@ export class Engine {
       }
       if (!state.deviceId || !state.connected) throw new Error('Sign in to connect this browser.');
       const remotePause = command.type === 'pauseDevice' && command.deviceId !== state.deviceId;
-      if (['revoke', 'approve', 'restore'].includes(command.type) || remotePause)
-        await this.authorize();
+      if (['revoke', 'approve'].includes(command.type) || remotePause) await this.authorize();
       if (command.type === 'revoke') {
         if (command.deviceId === state.deviceId)
           throw new Error('Use Disconnect on this browser to remove it.');
@@ -170,7 +168,7 @@ export class Engine {
             throw error;
         }
         await this.auth?.signOut();
-        // Synthetic menu/mobile folders remain native roots after sign-out.
+        // The synthetic menu folder remains a native root after sign-out.
         // Retain only root IDs so reconnecting cannot import those wrappers.
         state = { ...initialState(), roots: state.roots };
         await this.save(state);
@@ -190,37 +188,6 @@ export class Engine {
         });
         state.safetyApproved = true;
         state.status = 'ready';
-        await this.save(state);
-      }
-      if (command.type === 'restore') {
-        const event = state.snapshot?.activity.find((a) => a.id === command.activityId);
-        if (!event?.before) throw new Error('This change has no earlier version to restore.');
-        // Recover a folder and its tombstoned descendants as explicit operations.
-        const source = state.snapshot!.nodes;
-        const restore = [event.attempted ?? event.before];
-        if (event.before.kind === 'folder') {
-          const ids = new Set([event.nodeId]);
-          let added = true;
-          while (added) {
-            added = false;
-            for (const n of source)
-              if (n.deleted && ids.has(n.parentId) && !ids.has(n.id)) {
-                ids.add(n.id);
-                restore.push(n);
-                added = true;
-              }
-          }
-        }
-        for (const n of parentFirst(restore.map((n) => ({ ...n, deleted: false })))) {
-          state.outbox.push({
-            id: crypto.randomUUID(),
-            sequence: ++state.sequence,
-            nodeId: n.id,
-            baseRevision: source.find((x) => x.id === n.id)?.revision ?? 0,
-            kind: 'restore',
-            node: { ...n, deleted: false },
-          });
-        }
         await this.save(state);
       }
       // A paused exchange only captures local edits and reports the pause to the server.
@@ -294,7 +261,7 @@ export class Engine {
         if (previous && previous.url !== n.url) delete aliases[n.id];
       }
     const ops = diff(
-      state.baseline.filter((n) => !ignoredBefore.has(n.id)),
+      portableNodes(state.baseline).filter((n) => !ignoredBefore.has(n.id)),
       local.filter((n) => !aliases[n.id]),
       state.sequence,
     );
@@ -463,7 +430,9 @@ export class Engine {
   }
   private async project(state: State, nodes: Node[]): Promise<boolean> {
     const visible = parentFirst(
-      nodes.filter((n) => this.adapter.projected(n)).map((n) => ({ ...n })),
+      portableNodes(nodes)
+        .filter((n) => this.adapter.projected(n))
+        .map((n) => ({ ...n })),
     );
     // Canonical separators omitted on Chromium do not occupy native indices.
     const groups = new Map<string, Node[]>();
@@ -479,7 +448,7 @@ export class Engine {
     const target = new Map(visible.map((n) => [n.id, n]));
     const check = async () => {
       const current = await this.adapter.read(state);
-      return diff(state.baseline, current, state.sequence).length === 0;
+      return diff(portableNodes(state.baseline), current, state.sequence).length === 0;
     };
     for (const n of visible) {
       if (!(await check())) return false;
@@ -508,7 +477,7 @@ export class Engine {
         });
     }
     // Delete children first. remove() refuses to delete folders containing new local children.
-    for (const n of parentFirst(state.baseline).reverse())
+    for (const n of parentFirst(portableNodes(state.baseline)).reverse())
       if (!target.has(n.id)) {
         if (!(await check())) return false;
         await this.adapter.write(state, this.store, {

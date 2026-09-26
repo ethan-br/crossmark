@@ -110,7 +110,6 @@ export default defineBackground(() => {
     'approve',
     'disconnect',
     'revoke',
-    'restore',
     'export',
   ]);
   browser.runtime.onMessage.addListener((message: unknown, sender: Runtime.MessageSender) => {
@@ -138,8 +137,7 @@ export default defineBackground(() => {
     if (
       (m.type === 'revoke' && typeof m.deviceId !== 'string') ||
       (m.type === 'pauseDevice' &&
-        (typeof m.deviceId !== 'string' || typeof m.paused !== 'boolean')) ||
-      (m.type === 'restore' && typeof m.activityId !== 'string')
+        (typeof m.deviceId !== 'string' || typeof m.paused !== 'boolean'))
     )
       return Promise.resolve({ error: 'Invalid command.' });
     return engine.command(message as Command).then(

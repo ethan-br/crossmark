@@ -7,8 +7,8 @@ export class MemoryBookmarks implements BookmarkAPI {
     readonly persist?: (nodes: NativeNode[]) => void,
   ) {
     this.nodes = nodes ?? [
-      { id: '1', title: 'Bookmarks Bar' },
-      { id: '2', title: 'Other Bookmarks' },
+      { id: '1', title: 'Bookmarks Bar', folderType: 'bookmarks-bar' },
+      { id: '2', title: 'Other Bookmarks', folderType: 'other' },
     ];
   }
   private save() {

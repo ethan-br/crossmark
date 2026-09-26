@@ -21,17 +21,13 @@ export interface Operation {
   node?: Node;
   fields?: Partial<Fields>;
 }
+export type ActivityKind = 'added' | 'removed' | 'moved' | 'synced';
 export interface Activity {
   id: string;
-  nodeId: string;
+  kind: ActivityKind;
+  /** Bookmark or folder title, or the browser name for `synced`. */
   title: string;
-  kind: Operation['kind'];
-  device: string;
   at: number;
-  conflict: boolean;
-  before?: Node;
-  after?: Node;
-  attempted?: Node;
 }
 export interface Device {
   id: string;
@@ -49,6 +45,19 @@ export interface Snapshot {
 }
 export const isRoot = (id: string): id is Root => (ROOTS as readonly string[]).includes(id);
 export const alive = (nodes: Node[]) => nodes.filter((n) => !n.deleted);
+// Legacy mobile subtrees stay in cloud snapshots but do not join or project.
+export function portableNodes(nodes: Node[]): Node[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  return nodes.filter((node) => {
+    let parent = node.parentId;
+    const seen = new Set<string>();
+    while (byId.has(parent) && !seen.has(parent)) {
+      seen.add(parent);
+      parent = byId.get(parent)!.parentId;
+    }
+    return parent !== 'mobile';
+  });
+}
 export const count = (nodes: Node[]) => ({
   bookmarks: alive(nodes).filter((n) => n.kind === 'bookmark').length,
   folders: alive(nodes).filter((n) => n.kind === 'folder').length,

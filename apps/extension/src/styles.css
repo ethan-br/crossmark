@@ -243,8 +243,6 @@
 #cm-extension-mock .cm-time {
   font-size: 11px;
   white-space: nowrap;
-  align-self: flex-start;
-  margin-top: 3px;
   color: var(--cm-muted);
 }
 #cm-extension-mock .cm-actions {
@@ -664,19 +662,6 @@ p {
   gap: 9px;
   padding: 50px 20px;
   color: var(--cm-muted);
-}
-#cm-extension-mock .cm-conflict {
-  font-size: 10px;
-  color: var(--cm-amber);
-  margin-top: 5px;
-}
-#cm-extension-mock .cm-restore {
-  font-size: 10px;
-  margin-top: 5px;
-}
-#cm-extension-mock .cm-restore svg {
-  width: 11px;
-  height: 11px;
 }
 #cm-extension-mock .cm-remove {
   color: var(--cm-muted);
