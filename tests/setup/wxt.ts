@@ -83,7 +83,7 @@ export function installIdentityMocks() {
   vi.spyOn(fakeBrowser.identity, 'getProfileUserInfo').mockResolvedValue({
     email: '',
     id: '',
-  });
+  } as never);
   vi.spyOn(fakeBrowser.identity, 'removeCachedAuthToken').mockResolvedValue();
   vi.spyOn(fakeBrowser.identity, 'clearAllCachedAuthTokens').mockResolvedValue();
 }

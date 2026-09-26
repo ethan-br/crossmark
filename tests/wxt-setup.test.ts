@@ -71,6 +71,7 @@ describe('WXT fake-browser setup', () => {
         interactive: true,
       }),
     ).rejects.toThrow(/unused/);
+    expect(await fakeBrowser.identity.getProfileUserInfo({})).toEqual({ email: '', id: '' });
   });
 
   it('supports action badge updates used by the background', async () => {
