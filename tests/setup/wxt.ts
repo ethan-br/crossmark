@@ -80,9 +80,10 @@ export function installIdentityMocks() {
   vi.spyOn(fakeBrowser.identity, 'launchWebAuthFlow').mockRejectedValue(
     new Error('identity.launchWebAuthFlow is unused; configure email/password auth'),
   );
-  vi.spyOn(fakeBrowser.identity, 'getProfileUserInfo').mockImplementation(
-    (async () => ({ email: '', id: '' })) as never,
-  );
+  vi.spyOn(fakeBrowser.identity, 'getProfileUserInfo').mockResolvedValue({
+    email: '',
+    id: '',
+  } as never);
   vi.spyOn(fakeBrowser.identity, 'removeCachedAuthToken').mockResolvedValue();
   vi.spyOn(fakeBrowser.identity, 'clearAllCachedAuthTokens').mockResolvedValue();
 }
