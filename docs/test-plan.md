@@ -22,7 +22,7 @@ Screenshots and results are written to `output/verification/chromium-*` and `fir
 Complete [login setup](auth-setup.md), build and load both extensions in disposable profiles with test bookmarks.
 
 1. Create an account in Chromium. Confirm account email, browser name and seeded bookmark counts. Close and reopen the popup during and after login; the background should complete the operation.
-2. Sign in with the same account in Firefox. Confirm its existing user bookmarks under toolbar, other and menu are replaced by the cloud tree, including cloud duplicates and separators. Verify managed roots are untouched and the previous local snapshot is available in export. Repeat in both directions for Chrome, Helium and Firefox.
+2. Sign in with the same account in Firefox. Confirm its existing user bookmarks under toolbar, other and menu are replaced by the cloud tree, including cloud duplicates and separators. Verify managed and mobile roots are untouched and the previous local snapshot is available in export. Repeat in both directions for Chrome, Helium and Firefox.
 3. Add, rename, move, reorder and delete native bookmarks in both browsers. Check convergence, exact URLs, Firefox menu mapping and separator retention. Repeat sync without edits and check no extra activity appears.
 4. Pause one browser, make local changes, and resume. Check pending changes survive popup/background restarts and upload once. Test network loss and reconnection.
 5. Delete a folder and confirm Activity shows only `<folder> removed` with a relative time, with no restore action, source browser or path. Export from Settings and check it contains bookmark/recovery data without sessions or credentials.
@@ -30,6 +30,7 @@ Complete [login setup](auth-setup.md), build and load both extensions in disposa
 7. Revoke another browser, then try syncing it; native bookmarks should remain intact. Sign out and sign in again to reconnect to the same account's collection.
 8. End/expire a Better Auth session using the development dashboard. Confirm the extension asks for the password again and retains queued edits. Reauthenticate with the same account and sync them.
 9. Reinstall in a disposable profile and sign in again. Confirm the server collection is not reseeded and local bookmarks are replaced automatically.
+10. In Chromium with both local and account bookmark trees, confirm a new installation selects the account toolbar and Other pair. Confirm a connected installation keeps its chosen pair when another appears, then change the selected native root IDs and verify toolbar, other and menu sync continues without reconnecting.
 
 ## Current verification
 

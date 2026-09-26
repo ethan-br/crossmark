@@ -79,12 +79,18 @@ describe('two-browser synchronization and recovery', () => {
       url: 'https://local.example',
     });
     await b.native.create({ parentId: bOther, title: 'Other', url: 'https://other.example' });
-    if (second === 'Firefox')
+    if (second === 'Firefox') {
       await b.native.create({
         parentId: 'menu________',
         title: 'Menu local',
         url: 'https://menu-local.example',
       });
+      await b.native.create({
+        parentId: 'mobile______',
+        title: 'Mobile local',
+        url: 'https://mobile-local.example',
+      });
+    }
     const managed = { id: 'managed-root', title: 'Managed', folderType: 'managed' };
     b.native.nodes.push(managed);
     const managedItem = await b.native.create({
@@ -102,7 +108,13 @@ describe('two-browser synchronization and recovery', () => {
         .filter((n) => n.url)
         .map((n) => n.url)
         .sort(),
-    ).toEqual(['https://cloud.example', 'https://policy.example']);
+    ).toEqual(
+      [
+        'https://cloud.example',
+        'https://policy.example',
+        ...(second === 'Firefox' ? ['https://mobile-local.example'] : []),
+      ].sort(),
+    );
     expect(b.native.nodes.find((n) => n.id === managedItem.id)).toBeDefined();
     expect(b.native.nodes.find((n) => n.title === 'Local folder')).toBeUndefined();
     expect((await ready(a)).snapshot!.nodes).toEqual(original.nodes);
@@ -128,6 +140,177 @@ describe('two-browser synchronization and recovery', () => {
     expect(b.native.nodes.filter((n) => n.url)).toHaveLength(2);
     expect(b.native.nodes.filter((n) => n.type === 'separator')).toHaveLength(0);
     expect(b.native.nodes.filter((n) => n.title === 'Bookmarks Menu')).toHaveLength(1);
+  });
+
+  it('syncs portable roots through dual Chrome trees and root ID churn', async () => {
+    const { device } = await setup();
+    const firefox = device('Firefox', 'Firefox');
+    await firefox.native.create({
+      parentId: 'toolbar_____',
+      title: 'Toolbar item',
+      url: 'https://toolbar.example',
+    });
+    await firefox.native.create({
+      parentId: 'menu________',
+      title: 'Menu item',
+      url: 'https://menu.example',
+    });
+    await firefox.engine.command({ type: 'connect', credentials, name: 'Firefox' });
+    const chrome = device('Chrome', 'Chrome');
+    chrome.native.nodes = [
+      { id: '1', title: 'Local toolbar', folderType: 'bookmarks-bar', syncing: false },
+      { id: '2', title: 'Local other', folderType: 'other', syncing: false },
+      { id: '5', title: 'Account toolbar', folderType: 'bookmarks-bar', syncing: true },
+      { id: '6', title: 'Account other', folderType: 'other', syncing: true },
+      { id: '7', title: 'Speed Dial' },
+    ];
+    await chrome.native.create({
+      parentId: '1',
+      title: 'Local only',
+      url: 'https://local.example',
+    });
+    await chrome.engine.command({ type: 'connect', credentials, name: 'Chrome' });
+    let state = await ready(chrome);
+    expect(state.roots).toMatchObject({ toolbar: '5', other: '6' });
+    expect(chrome.native.nodes.find((n) => n.url === 'https://toolbar.example')?.parentId).toBe(
+      '5',
+    );
+    const menu = chrome.native.nodes.find((n) => n.title === 'Bookmarks Menu')!;
+    expect(menu.parentId).toBe('6');
+    expect(chrome.native.nodes.find((n) => n.url === 'https://menu.example')?.parentId).toBe(
+      menu.id,
+    );
+    expect(chrome.native.nodes.find((n) => n.url === 'https://local.example')?.parentId).toBe('1');
+    chrome.native.nodes.find((n) => n.id === '5')!.id = '50';
+    chrome.native.nodes.find((n) => n.id === '6')!.id = '60';
+    for (const node of chrome.native.nodes) {
+      if (node.parentId === '5') node.parentId = '50';
+      if (node.parentId === '6') node.parentId = '60';
+    }
+    state = await ready(chrome);
+    expect(state.roots).toMatchObject({ toolbar: '50', other: '60', menu: menu.id });
+    expect(state.outbox).toHaveLength(0);
+    expect(chrome.native.nodes.filter((n) => n.title === 'Bookmarks Menu')).toHaveLength(1);
+    expect((await ready(firefox)).snapshot!.nodes).toHaveLength(2);
+  });
+
+  it('keeps legacy cloud mobile descendants from blocking portable projection', async () => {
+    const { t, device } = await setup();
+    const firefox = device('Firefox', 'Firefox');
+    await firefox.native.create({
+      parentId: 'toolbar_____',
+      title: 'Portable',
+      url: 'https://portable.example',
+    });
+    await firefox.engine.command({ type: 'connect', credentials, name: 'Firefox' });
+    const id = (await firefox.store.read()).deviceId as never;
+    await t.mutation(api.sync.push, {
+      deviceId: id,
+      operations: [
+        {
+          id: 'mobile-folder-op',
+          sequence: 1,
+          nodeId: 'mobile-folder',
+          baseRevision: 0,
+          kind: 'create',
+          node: {
+            id: 'mobile-folder',
+            kind: 'folder',
+            parentId: 'mobile',
+            title: 'Phone',
+            order: 0,
+            revision: 0,
+          },
+        },
+        {
+          id: 'mobile-bookmark-op',
+          sequence: 2,
+          nodeId: 'mobile-bookmark',
+          baseRevision: 0,
+          kind: 'create',
+          node: {
+            id: 'mobile-bookmark',
+            kind: 'bookmark',
+            parentId: 'mobile-folder',
+            title: 'Phone link',
+            url: 'https://phone.example',
+            order: 0,
+            revision: 0,
+          },
+        },
+      ],
+    });
+    const chrome = device('Chrome', 'Chrome');
+    await chrome.engine.command({ type: 'connect', credentials, name: 'Chrome' });
+    const state = await ready(chrome);
+    expect(state.snapshot!.nodes).toHaveLength(3);
+    expect(chrome.native.nodes.filter((n) => n.url).map((n) => n.url)).toEqual([
+      'https://portable.example',
+    ]);
+    expect(chrome.native.nodes.some((n) => n.title === 'Mobile Bookmarks')).toBe(false);
+  });
+
+  it('upgrades a persisted mobile baseline without deleting its cloud or native subtree', async () => {
+    const { t, device } = await setup();
+    const chrome = device('Legacy');
+    await chrome.engine.command({ type: 'connect', credentials, name: 'Legacy' });
+    const wrapper = await chrome.native.create({ parentId: '2', title: 'Mobile Bookmarks' });
+    const folder = await chrome.native.create({ parentId: wrapper.id, title: 'Phone' });
+    const link = await chrome.native.create({
+      parentId: folder.id,
+      title: 'Phone link',
+      url: 'https://phone.example',
+    });
+    const state = await chrome.store.read();
+    state.roots.mobile = wrapper.id;
+    state.baseline = [
+      {
+        id: 'legacy-folder',
+        kind: 'folder',
+        parentId: 'mobile',
+        title: 'Phone',
+        order: 0,
+        revision: 1,
+      },
+      {
+        id: 'legacy-link',
+        kind: 'bookmark',
+        parentId: 'legacy-folder',
+        title: 'Phone link',
+        url: 'https://phone.example',
+        order: 0,
+        revision: 2,
+      },
+    ];
+    state.mappings = { 'legacy-folder': folder.id, 'legacy-link': link.id };
+    await chrome.store.write(state);
+    await t.mutation(api.sync.push, {
+      deviceId: state.deviceId as never,
+      operations: [
+        {
+          id: 'legacy-folder-op',
+          sequence: 1,
+          nodeId: 'legacy-folder',
+          baseRevision: 0,
+          kind: 'create',
+          node: { ...state.baseline[0], revision: 0 },
+        },
+        {
+          id: 'legacy-link-op',
+          sequence: 2,
+          nodeId: 'legacy-link',
+          baseRevision: 0,
+          kind: 'create',
+          node: { ...state.baseline[1], revision: 0 },
+        },
+      ],
+    });
+    const upgraded = await ready(chrome);
+    expect(upgraded.outbox).toHaveLength(0);
+    expect(upgraded.snapshot!.nodes).toHaveLength(2);
+    expect(chrome.native.nodes.find((n) => n.id === wrapper.id)).toBeDefined();
+    expect(chrome.native.nodes.find((n) => n.id === link.id)?.url).toBe('https://phone.example');
+    expect(upgraded.baseline).toEqual([]);
   });
 
   it('recovers an interrupted native deletion while installing the collection', async () => {
