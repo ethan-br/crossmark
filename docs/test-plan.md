@@ -1,15 +1,33 @@
 # Validation
 
-Product testing uses WXT-built extensions: automated headless browser runs or manual installation. WXT's development server supports extension reloads; there is no standalone simulated web page or preview tunnel.
+Product testing has two layers:
 
-## Automated checks
+1. **Isolated Vitest suite** (`npm test`) — fast unit/integration tests with WXT's Vitest plugin and `@webext-core/fake-browser`. No developer browser profile, live OAuth, local Convex backend, or interactive browser is required.
+2. **Browser smoke tests** (`npm run test:browser`, `npm run test:firefox`, `npm run test:debug`) — install the real WXT-built extensions in disposable profiles and exercise native bookmark APIs. Keep these separate from the Vitest suite; they are slower and need browser binaries.
 
-`npm run check` performs TypeScript checking, the isolated test suite and both extension builds. The tests cover:
+WXT's development server supports extension reloads; there is no standalone simulated web page or preview tunnel.
+
+## Isolated Vitest suite
+
+`npm test` runs Vitest with `vitest.config.ts`, which loads [`WxtVitest`](https://wxt.dev/guide/essentials/unit-testing.html). Shared setup in `tests/setup/wxt.ts`:
+
+- Points `webextension-polyfill` at the in-memory fake browser (storage, runtime messaging, tabs, alarms, action).
+- Installs in-memory bookmark trees (Chromium or Firefox-shaped roots) where fake-browser leaves bookmark APIs unimplemented.
+- Stubs unused `identity` APIs so tests never touch live OAuth credentials.
+- Resets fake-browser state between tests.
+
+The suite covers:
 
 - Better Auth session validation, expired/unauthenticated sessions, account isolation on reads/writes/revocation, idempotent initialization and same-account joining.
-- Email/password sign-in and sign-up requests, rejected credentials, untrusted origins, unreachable backends, private session storage without the password, JWT use and expired session cleanup. Client transport tests use mocks. Separate tests exercise the real Better Auth HTTP routes for sign-up, sign-in, Convex token issuance, wrong/short passwords, duplicate accounts, origin checks and the removed Google routes.
+- Email/password sign-in and sign-up requests, rejected credentials, untrusted origins, unreachable backends, private session storage without the password, JWT use and expired session cleanup. Client transport tests use mocks against fake storage/runtime. Separate tests exercise the real Better Auth HTTP routes for sign-up, sign-in, Convex token issuance, wrong/short passwords, duplicate accounts, origin checks and the removed Google routes.
 - Independent field merges, tombstones, cycles, native convergence, joining replacement, pause/resume, missed events, crash journals, root disappearance, mass deletion, upload retries, interrupted initialization and edits during projection.
 - Extension backend origin validation, loopback defaults and network permission/CSP configuration for both browsers.
+- Background ↔ popup messaging boundaries: trusted sender checks, command allowlisting, connect/revoke validation and engine error surfacing (without a live extension page).
+- Firefox vs Chromium adapter behavior (menu roots, separators, portable-root selection) in Vitest. Full native menu/separator smoke remains browser-level.
+
+`npm run check` performs TypeScript checking, the isolated test suite and both extension builds.
+
+## Browser smoke tests
 
 `npm run test:browser` and `npm run test:firefox` install the actual builds in disposable profiles. Each checks startup, native reads, the replacement warning in the email/password sign-in UI, an error for a failed sign-in (unreachable backend or unknown account), preservation of bookmarks while signed out, credential-free export and popup reopening. Firefox additionally reads its native menu and separators. No personal profiles are opened. Firefox's system-context permission is used only to open the installed extension's own popup page. The Firefox package command creates an XPI with `manifest.json` at its archive root; an archive containing a top-level `firefox/` directory is invalid.
 

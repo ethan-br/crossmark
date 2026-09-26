@@ -1,35 +1,26 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+import { fakeBrowser } from 'wxt/testing/fake-browser';
+
 const mocks = vi.hoisted(() => ({
-  storage: {} as Record<string, unknown>,
   query: vi.fn(),
   setAuth: vi.fn(),
 }));
-vi.mock('webextension-polyfill', () => ({
-  default: {
-    runtime: { getURL: () => 'chrome-extension://test/' },
-    storage: {
-      local: {
-        get: async (key: string) => ({ [key]: mocks.storage[key] }),
-        set: async (value: Record<string, unknown>) => Object.assign(mocks.storage, value),
-        remove: async (keys: string | string[]) => {
-          for (const key of [keys].flat()) delete mocks.storage[key];
-        },
-      },
-    },
-  },
-}));
+
 vi.mock('convex/browser', () => ({
   ConvexHttpClient: class {
     query = mocks.query;
     setAuth = mocks.setAuth;
   },
 }));
+
 import { PasswordSession } from '../apps/extension/src/auth';
+
 let fetchMock: ReturnType<typeof vi.fn>;
 const credentials = { email: ' one@example.com ', password: 'correct horse' };
+const extensionOrigin = () => fakeBrowser.runtime.getURL('').replace(/\/$/, '');
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.storage = {};
   mocks.query.mockResolvedValue({ id: 'user-1', email: 'one@example.com', name: 'One' });
   fetchMock = vi.fn(async (url: string) => {
     if (url.endsWith('/sign-in/email') || url.endsWith('/sign-up/email'))
@@ -42,10 +33,15 @@ beforeEach(() => {
   });
   vi.stubGlobal('fetch', fetchMock);
 });
+
 const session = () =>
   new PasswordSession('https://backend.convex.cloud', 'https://backend.convex.site');
 const body = (path: string) =>
   JSON.parse(fetchMock.mock.calls.find(([url]) => url.endsWith(path))![1].body);
+const storedSession = async () =>
+  (await fakeBrowser.storage.local.get('authSession')).authSession as
+    { token?: string } | undefined;
+
 it('exchanges email and password for a private session and a Convex JWT', async () => {
   const auth = session();
   expect(await auth.signIn(credentials)).toEqual({
@@ -55,15 +51,16 @@ it('exchanges email and password for a private session and a Convex JWT', async 
   });
   expect(body('/sign-in/email')).toEqual({ email: 'one@example.com', password: 'correct horse' });
   expect(mocks.setAuth).toHaveBeenCalledWith('convex-jwt');
-  expect(mocks.storage.authSession).toMatchObject({ token: 'signed-session-secret' });
-  expect(JSON.stringify(mocks.storage)).not.toContain('correct horse');
+  expect(await storedSession()).toMatchObject({ token: 'signed-session-secret' });
+  expect(JSON.stringify(await fakeBrowser.storage.local.get(null))).not.toContain('correct horse');
   const jwtCall = fetchMock.mock.calls.find(([url]) => url.endsWith('/convex/token'))!;
   expect(jwtCall[1].headers).toMatchObject({ Authorization: 'Bearer signed-session-secret' });
   expect(await auth.token()).toBe('convex-jwt');
   await auth.signOut();
-  expect(mocks.storage.authSession).toBeUndefined();
+  expect(await storedSession()).toBeUndefined();
   await expect(auth.token()).rejects.toThrow('Sign in to continue');
 });
+
 it('creates an account when requested', async () => {
   await session().signIn({ ...credentials, create: true });
   expect(body('/sign-up/email')).toEqual({
@@ -73,6 +70,7 @@ it('creates an account when requested', async () => {
   });
   expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/sign-in/email'))).toBe(false);
 });
+
 it('reports rejected credentials without storing a session', async () => {
   fetchMock.mockResolvedValue(
     Response.json(
@@ -83,8 +81,9 @@ it('reports rejected credentials without storing a session', async () => {
   await expect(session().signIn(credentials)).rejects.toThrow(
     /Invalid email or password\. Accounts created with Google sign-in/,
   );
-  expect(mocks.storage.authSession).toBeUndefined();
+  expect(await storedSession()).toBeUndefined();
 });
+
 it.each([
   ['EMAIL_PASSWORD_DISABLED', 400],
   ['EMAIL_PASSWORD_SIGN_UP_DISABLED', 400],
@@ -95,12 +94,14 @@ it.each([
     'The backend at https://backend.convex.site does not support email/password login. Deploy the current Convex functions',
   );
 });
+
 it('explains rate limiting', async () => {
   fetchMock.mockResolvedValue(
     Response.json({ message: 'Too many requests. Please try again later.' }, { status: 429 }),
   );
   await expect(session().signIn(credentials)).rejects.toThrow('Too many attempts');
 });
+
 it('requires both an email and a password before contacting the backend', async () => {
   await expect(session().signIn({ email: ' ', password: 'x' })).rejects.toThrow('Enter your email');
   await expect(session().signIn({ email: 'a@example.com', password: '' })).rejects.toThrow(
@@ -108,27 +109,32 @@ it('requires both an email and a password before contacting the backend', async 
   );
   expect(fetchMock).not.toHaveBeenCalled();
 });
+
 it('explains a missing trusted origin', async () => {
   fetchMock.mockResolvedValue(
     Response.json({ code: 'INVALID_ORIGIN', message: 'Invalid origin' }, { status: 403 }),
   );
   await expect(session().signIn(credentials)).rejects.toThrow(
-    'Add chrome-extension://test to AUTH_TRUSTED_ORIGINS',
+    `Add ${extensionOrigin()} to AUTH_TRUSTED_ORIGINS`,
   );
 });
+
 it('reports an unreachable backend', async () => {
   fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
   await expect(session().signIn(credentials)).rejects.toThrow('Could not reach');
 });
+
 it('requires login after an expired session and still allows sign-out', async () => {
-  mocks.storage.authSession = { token: 'expired' };
-  mocks.storage.googleSession = { token: 'legacy' };
+  await fakeBrowser.storage.local.set({
+    authSession: { token: 'expired' },
+    googleSession: { token: 'legacy' },
+  });
   fetchMock.mockImplementation(async () =>
     Response.json({ message: 'Unauthenticated' }, { status: 401 }),
   );
   const auth = session();
   await expect(auth.token()).rejects.toThrow('Sign in to continue');
   await auth.signOut();
-  expect(mocks.storage.authSession).toBeUndefined();
-  expect(mocks.storage.googleSession).toBeUndefined();
+  expect(await storedSession()).toBeUndefined();
+  expect((await fakeBrowser.storage.local.get('googleSession')).googleSession).toBeUndefined();
 });
