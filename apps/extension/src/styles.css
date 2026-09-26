@@ -113,13 +113,6 @@
   border-color: var(--cm-accent);
   color: var(--cm-text);
 }
-#cm-extension-mock .cm-tab-count {
-  font-size: 11px;
-  border-radius: 5px;
-  background: var(--cm-soft);
-  padding: 0 5px;
-  color: var(--cm-muted);
-}
 #cm-extension-mock .cm-content {
   padding: 20px;
 }
@@ -368,11 +361,17 @@
   margin-left: 5px;
   white-space: nowrap;
 }
-#cm-extension-mock .cm-browser-state {
-  font-size: 11px;
-  color: var(--cm-accent);
+#cm-extension-mock .cm-browser-actions {
   margin-left: auto;
-  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+#cm-extension-mock .cm-browser-actions svg {
+  width: 12px;
+  height: 12px;
 }
 #cm-extension-mock .cm-note {
   font-size: 12px;
@@ -665,9 +664,6 @@ p {
   color: var(--cm-muted);
 }
 #cm-extension-mock .cm-remove {
-  display: block;
-  font-size: 10px;
-  margin-top: 4px;
   color: var(--cm-muted);
 }
 #cm-extension-mock .cm-setting-button {

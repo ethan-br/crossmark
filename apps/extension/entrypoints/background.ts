@@ -106,6 +106,7 @@ export default defineBackground(() => {
     'connect',
     'sync',
     'pause',
+    'pauseDevice',
     'approve',
     'disconnect',
     'revoke',
@@ -133,7 +134,11 @@ export default defineBackground(() => {
       )
         return Promise.resolve({ error: 'Invalid connection request.' });
     }
-    if (m.type === 'revoke' && typeof m.deviceId !== 'string')
+    if (
+      (m.type === 'revoke' && typeof m.deviceId !== 'string') ||
+      (m.type === 'pauseDevice' &&
+        (typeof m.deviceId !== 'string' || typeof m.paused !== 'boolean'))
+    )
       return Promise.resolve({ error: 'Invalid command.' });
     return engine.command(message as Command).then(
       (data) => ({ data }),

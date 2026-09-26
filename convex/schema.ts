@@ -51,6 +51,7 @@ export default defineSchema({
     cursor: v.number(),
     sequence: v.number(),
     revoked: v.boolean(),
+    paused: v.optional(v.boolean()),
     joinMatches: v.optional(v.array(v.object({ localId: v.string(), nodeId: v.string() }))),
   })
     .index('by_installation', ['ownerId', 'installationId'])

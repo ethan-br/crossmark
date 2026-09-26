@@ -148,10 +148,10 @@ export const snapshot = query({
       devices: devices.map((d) => ({
         id: d._id,
         name: d.name,
-        browser: d.browser,
         lastSeen: d.lastSeen,
         cursor: d.cursor,
         revoked: d.revoked,
+        paused: d.paused ?? false,
       })),
       activity: [...syncs, ...changes].sort((a, b) => b.at - a.at).slice(0, 100),
     };
@@ -264,13 +264,29 @@ export const backup = mutation({
     });
   },
 });
+async function target(ctx: MutationCtx, deviceId: Id<'devices'>, targetDeviceId: Id<'devices'>) {
+  const device = await authenticate(ctx, deviceId);
+  const target = await ctx.db.get(targetDeviceId);
+  if (!target || target.collectionId !== device.collectionId || target.ownerId !== device.ownerId)
+    return fail('Browser not found.');
+  return target;
+}
 export const revoke = mutation({
   args: { deviceId: v.id('devices'), targetDeviceId: v.id('devices') },
   handler: async (ctx, { deviceId, targetDeviceId }) => {
-    const device = await authenticate(ctx, deviceId);
-    const target = await ctx.db.get(targetDeviceId);
-    if (!target || target.collectionId !== device.collectionId || target.ownerId !== device.ownerId)
-      fail('Browser not found.');
+    await target(ctx, deviceId, targetDeviceId);
     await ctx.db.patch(targetDeviceId, { revoked: true });
   },
+});
+// Any browser in the collection may pause another; the target adopts the flag on its next exchange.
+export const setPaused = mutation({
+  args: { deviceId: v.id('devices'), targetDeviceId: v.id('devices'), paused: v.boolean() },
+  handler: async (ctx, { deviceId, targetDeviceId, paused }) => {
+    if ((await target(ctx, deviceId, targetDeviceId)).revoked) fail('Browser not found.');
+    await ctx.db.patch(targetDeviceId, { paused });
+  },
+});
+export const pauseState = query({
+  args: { deviceId: v.id('devices') },
+  handler: async (ctx, { deviceId }) => (await authenticate(ctx, deviceId)).paused ?? false,
 });
