@@ -14,15 +14,12 @@ import {
   ChevronRight,
   BookmarkPlus,
   FolderInput,
-  Pencil,
-  FolderPlus,
   Trash2,
   Globe,
   ArrowLeft,
   UserRound,
   Download,
   X,
-  RotateCcw,
   Info,
   LoaderCircle,
   LogOut,
@@ -43,18 +40,18 @@ function relative(time?: number) {
   if (!time) return 'Never';
   const seconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
   return seconds < 60
-    ? 'just now'
+    ? `${seconds}s ago`
     : seconds < 3600
       ? `${Math.floor(seconds / 60)}m ago`
       : seconds < 86400
         ? `${Math.floor(seconds / 3600)}h ago`
-        : new Date(time).toLocaleDateString();
+        : `${Math.floor(seconds / 86400)}d ago`;
 }
-const rootNames: Record<string, string> = {
-  toolbar: 'Bookmarks Toolbar',
-  other: 'Other Bookmarks',
-  menu: 'Bookmarks Menu',
-  mobile: 'Mobile Bookmarks',
+const activityLines: Record<Activity['kind'], { icon: typeof Check; verb: string }> = {
+  added: { icon: BookmarkPlus, verb: 'added' },
+  removed: { icon: Trash2, verb: 'removed' },
+  moved: { icon: FolderInput, verb: 'moved' },
+  synced: { icon: RefreshCw, verb: 'synced' },
 };
 function App() {
   const [state, setState] = useState<State>(initialState());
@@ -95,7 +92,7 @@ function App() {
       if (area === 'local') void refresh();
     };
     browser.storage.onChanged.addListener(listener);
-    const time = setInterval(() => tick((t) => t + 1), 10000);
+    const time = setInterval(() => tick((t) => t + 1), 1000);
     return () => {
       active = false;
       browser.storage.onChanged.removeListener(listener);
@@ -152,7 +149,10 @@ function App() {
   const stats = count(state.baseline);
   const pending = state.outbox.length;
   const browsers = state.snapshot?.devices.filter((d) => !d.revoked) ?? [];
-  const activity = state.snapshot?.activity ?? [];
+  // Snapshots cached by earlier versions can hold activity kinds that are no longer shown.
+  const activity = (state.snapshot?.activity ?? []).filter((e) =>
+    Object.hasOwn(activityLines, e.kind),
+  );
   const details = {
     ready: {
       icon: Check,
@@ -198,68 +198,17 @@ function App() {
     },
   }[status];
   const StatusIcon = details.icon;
-  function eventRow(event: Activity, full = false) {
-    const Icon =
-      event.kind === 'create'
-        ? event.after?.kind === 'folder'
-          ? FolderPlus
-          : BookmarkPlus
-        : event.kind === 'delete'
-          ? Trash2
-          : event.kind === 'restore'
-            ? RotateCcw
-            : event.before?.parentId !== event.after?.parentId
-              ? FolderInput
-              : Pencil;
-    const verb =
-      event.kind === 'create'
-        ? 'Added'
-        : event.kind === 'delete'
-          ? 'Deleted'
-          : event.kind === 'restore'
-            ? 'Restored'
-            : event.before?.parentId !== event.after?.parentId
-              ? 'Moved'
-              : 'Updated';
-    const parent = event.after?.parentId ?? event.before?.parentId;
-    const folder = parent
-      ? (rootNames[parent] ?? state.snapshot?.nodes.find((n) => n.id === parent)?.title)
-      : undefined;
+  function eventRow(event: Activity) {
+    const { icon: Icon, verb } = activityLines[event.kind];
     return (
       <div className="cm-event" key={event.id}>
         <span className="cm-event-icon">
           <Icon />
         </span>
-        <div className="cm-event-text">
-          <div className="cm-item-title">{event.title || 'Untitled'}</div>
-          <div className="cm-secondary">
-            {verb} in {event.device}
-            {folder ? ` · ${folder}` : ''}
-          </div>
-          {event.conflict && (
-            <div className="cm-conflict">Concurrent edit; prior version retained.</div>
-          )}
-          {full && event.before && (
-            <button
-              className="cm-link cm-restore"
-              disabled={busy}
-              onClick={() =>
-                setConfirm({
-                  title: 'Restore bookmark version?',
-                  body: `Restore “${(event.attempted ?? event.before)!.title || 'Untitled'}” across connected browsers.`,
-                  command: { type: 'restore', activityId: event.id },
-                  label: 'Restore',
-                })
-              }
-            >
-              <RotateCcw />
-              {event.attempted ? 'Restore saved edit' : 'Restore earlier version'}
-            </button>
-          )}
+        <div className="cm-event-text cm-item-title">
+          {event.title || 'Untitled'} {verb}
         </div>
-        <time className="cm-time" title={new Date(event.at).toLocaleString()}>
-          {relative(event.at)}
-        </time>
+        <time className="cm-time">{relative(event.at)}</time>
       </div>
     );
   }
@@ -510,9 +459,9 @@ function App() {
               {tab === 'activity' && (
                 <section className="cm-content" aria-label="Bookmark activity">
                   <h2 className="cm-panel-title">Activity</h2>
-                  <p className="cm-intro">Latest 100 changes across connected browsers.</p>
+                  <p className="cm-intro">Recent bookmark changes and syncs.</p>
                   {activity.length ? (
-                    activity.map((e) => eventRow(e, true))
+                    activity.map((e) => eventRow(e))
                   ) : (
                     <p className="cm-empty">No changes recorded.</p>
                   )}

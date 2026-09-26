@@ -1,4 +1,11 @@
-import { isRoot, validateTree, type Node, type Operation, type Fields } from '../model';
+import {
+  isRoot,
+  validateTree,
+  type ActivityKind,
+  type Node,
+  type Operation,
+  type Fields,
+} from '../model';
 const keys = ['title', 'url', 'parentId', 'order'] as const;
 export function diff(
   before: Node[],
@@ -86,6 +93,21 @@ export function applyOperation(
   const result = [...map.values()];
   validateTree(result);
   return { nodes: result, before, after, conflict };
+}
+// Title/URL edits, reorders within a folder, stale edits to tombstones and
+// no-op creates are not structural changes and produce no activity.
+export function activityKind(
+  kind: Operation['kind'],
+  before?: Node,
+  after?: Node,
+): Exclude<ActivityKind, 'synced'> | undefined {
+  const node = after ?? before;
+  if (!node || node.kind === 'separator') return;
+  if (kind === 'create') return before ? undefined : 'added';
+  if (!before || before.deleted) return;
+  if (kind === 'delete') return 'removed';
+  if (kind === 'update' && after && !after.deleted && after.parentId !== before.parentId)
+    return 'moved';
 }
 export function sameNative(a: Node, b: Node) {
   return a.kind === b.kind && keys.every((k) => a[k] === b[k]);

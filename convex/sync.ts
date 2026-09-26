@@ -3,8 +3,8 @@ import { mutation, query, type QueryCtx, type MutationCtx } from './_generated/s
 import { node, operation } from './schema';
 import { authComponent } from './auth';
 import type { Id } from './_generated/dataModel';
-import { validateTree, type Node, type Operation } from '../packages/model';
-import { applyOperation } from '../packages/sync-core';
+import { validateTree, type Activity, type Node, type Operation } from '../packages/model';
+import { activityKind, applyOperation } from '../packages/sync-core';
 import { reconcileJoin } from '../packages/sync-core/join';
 const fail = (message: string): never => {
   throw new ConvexError(message);
@@ -133,7 +133,15 @@ export const snapshot = query({
       .query('operations')
       .withIndex('by_collection', (q) => q.eq('collectionId', device.collectionId))
       .order('desc')
-      .take(100);
+      .take(500);
+    const changes: Activity[] = [];
+    for (const h of history) {
+      const kind = activityKind(h.kind as Operation['kind'], h.before, h.after);
+      if (kind) changes.push({ id: h._id, kind, title: h.title, at: h.at });
+    }
+    const syncs: Activity[] = devices
+      .filter((d) => !d.revoked && d.lastSync)
+      .map((d) => ({ id: `sync:${d._id}`, kind: 'synced', title: d.name, at: d.lastSync! }));
     return {
       nodes: collection.nodes,
       revision: collection.revision,
@@ -145,18 +153,7 @@ export const snapshot = query({
         cursor: d.cursor,
         revoked: d.revoked,
       })),
-      activity: history.map((h) => ({
-        id: h._id,
-        nodeId: h.nodeId,
-        title: h.title,
-        kind: h.kind,
-        device: h.device,
-        at: h.at,
-        conflict: h.conflict,
-        ...(h.before ? { before: h.before } : {}),
-        ...(h.after ? { after: h.after } : {}),
-        ...(h.attempted ? { attempted: h.attempted } : {}),
-      })),
+      activity: [...syncs, ...changes].sort((a, b) => b.at - a.at).slice(0, 100),
     };
   },
 });
@@ -230,7 +227,27 @@ export const checkpoint = mutation({
       cursor > (collection?.revision ?? 0)
     )
       fail('Invalid checkpoint.');
-    await ctx.db.patch(device._id, { cursor, lastSeen: Date.now() });
+    // A browser syncs when it applies revisions from elsewhere, not only its own pushes.
+    // Revision 1 is the collection seed, which has no operation row.
+    const received =
+      cursor > device.cursor &&
+      ((device.cursor === 0 && collection!.sourceDevice !== device.installationId) ||
+        !!(await ctx.db
+          .query('operations')
+          .withIndex('by_collection', (q) =>
+            q
+              .eq('collectionId', device.collectionId)
+              .gt('revision', device.cursor)
+              .lte('revision', cursor),
+          )
+          .filter((q) => q.neq(q.field('deviceId'), device._id))
+          .first()));
+    const now = Date.now();
+    await ctx.db.patch(device._id, {
+      cursor,
+      lastSeen: now,
+      ...(received ? { lastSync: now } : {}),
+    });
   },
 });
 export const backup = mutation({

@@ -19,6 +19,7 @@ export const operation = v.object({
     v.literal('create'),
     v.literal('update'),
     v.literal('delete'),
+    // No longer emitted; still accepted so outboxes queued by earlier clients can drain.
     v.literal('restore'),
   ),
   node: v.optional(node),
@@ -46,6 +47,7 @@ export default defineSchema({
     name: v.string(),
     browser: v.string(),
     lastSeen: v.number(),
+    lastSync: v.optional(v.number()),
     cursor: v.number(),
     sequence: v.number(),
     revoked: v.boolean(),

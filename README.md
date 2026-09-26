@@ -69,7 +69,7 @@ Use one Crossmark installation per independently native-synced collection. Conne
 - Email/password login, account-scoped collection access and browser revocation.
 - Durable local operations, idempotent uploads, startup reconciliation and native-write recovery journals.
 - First-browser initialization, reviewed merges and large-change approval.
-- Overview, activity, browser status, pause/resume, export and earlier-version restore.
+- Overview, activity, browser status, pause/resume and export.
 - Firefox menu/separator handling and Chromium menu-folder projection.
 - Remote polling every 30 seconds, subject to browser sleep and scheduling.
 

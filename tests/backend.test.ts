@@ -97,15 +97,15 @@ describe('Convex authorization and durable operations', () => {
         nodeId: 'a',
         baseRevision: 1,
         kind: 'update' as const,
-        fields: { title: 'Changed' },
+        fields: { parentId: 'other' },
       },
     ];
     await t.mutation(api.sync.push, { deviceId, operations });
     await t.mutation(api.sync.push, { deviceId, operations });
     const snapshot = await t.query(api.sync.snapshot, { deviceId });
     expect(snapshot.revision).toBe(2);
-    expect(snapshot.activity).toHaveLength(1);
-    expect(snapshot.nodes[0].title).toBe('Changed');
+    expect(snapshot.activity).toEqual([expect.objectContaining({ kind: 'moved', title: 'A' })]);
+    expect(snapshot.nodes[0].parentId).toBe('other');
   });
   it('rejects out-of-order sequences and rolls back atomic batches', async () => {
     const { t, deviceId } = await setup();
@@ -146,5 +146,104 @@ it('retains the losing edit when a tombstone wins', async () => {
   });
   const snapshot = await t.query(api.sync.snapshot, { deviceId });
   expect(snapshot.nodes[0].deleted).toBe(true);
-  expect(snapshot.activity[0].attempted?.title).toBe('Recover this offline title');
+  expect(snapshot.activity.map(({ kind, title }) => ({ kind, title }))).toEqual([
+    { kind: 'removed', title: 'A' },
+  ]);
+  const stale = await t.run((ctx) =>
+    ctx.db
+      .query('operations')
+      .filter((q) => q.eq(q.field('operationId'), 'stale'))
+      .unique(),
+  );
+  expect(stale?.attempted?.title).toBe('Recover this offline title');
+});
+
+it('limits activity to structural changes and browser syncs', async () => {
+  const { t, deviceId } = await setup();
+  const folder: Node = {
+    id: 'f',
+    kind: 'folder',
+    parentId: 'toolbar',
+    title: 'Folder',
+    order: 1,
+    revision: 0,
+  };
+  const operations = [
+    { kind: 'update', nodeId: 'a', baseRevision: 1, fields: { title: 'Renamed' } },
+    { kind: 'update', nodeId: 'a', baseRevision: 2, fields: { order: 3 } },
+    { kind: 'create', nodeId: 'f', baseRevision: 0, node: folder },
+    { kind: 'update', nodeId: 'a', baseRevision: 3, fields: { parentId: 'f' } },
+    { kind: 'delete', nodeId: 'f', baseRevision: 4 },
+  ] as const;
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: operations.map((op, i) => ({ ...op, id: `op${i}`, sequence: i + 1 })),
+  });
+  let snapshot = await t.query(api.sync.snapshot, { deviceId });
+  expect(snapshot.activity.map(({ kind, title }) => `${title} ${kind}`)).toEqual([
+    'Folder removed',
+    'Renamed moved',
+    'Folder added',
+  ]);
+  await t.mutation(api.sync.checkpoint, { deviceId, cursor: snapshot.revision });
+  snapshot = await t.query(api.sync.snapshot, { deviceId });
+  expect(snapshot.activity.filter((a) => a.kind === 'synced')).toEqual([]);
+  const second = await t.mutation(api.sync.connect, {
+    installationId: crypto.randomUUID(),
+    name: 'Second',
+    browser: 'Firefox',
+    nodes: [],
+  });
+  await t.mutation(api.sync.checkpoint, {
+    deviceId: second.deviceId,
+    cursor: snapshot.revision,
+  });
+  snapshot = await t.query(api.sync.snapshot, { deviceId });
+  expect(snapshot.activity[0]).toMatchObject({ kind: 'synced', title: 'Second' });
+  expect(Object.keys(snapshot.activity[0]).sort()).toEqual(['at', 'id', 'kind', 'title']);
+  const synced = snapshot.activity[0].at;
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await t.mutation(api.sync.checkpoint, {
+    deviceId: second.deviceId,
+    cursor: snapshot.revision,
+  });
+  snapshot = await t.query(api.sync.snapshot, { deviceId });
+  expect(snapshot.activity.filter((a) => a.kind === 'synced')).toEqual([
+    expect.objectContaining({ title: 'Second', at: synced }),
+  ]);
+});
+
+it('marks a browser synced only when it applies changes from elsewhere', async () => {
+  const { t, deviceId } = await setup();
+  await t.mutation(api.sync.checkpoint, { deviceId, cursor: 1 });
+  const second = await t.mutation(api.sync.connect, {
+    installationId: crypto.randomUUID(),
+    name: 'Second',
+    browser: 'Firefox',
+    nodes: [],
+  });
+  await t.mutation(api.sync.checkpoint, { deviceId: second.deviceId, cursor: 1 });
+  const synced = async () =>
+    (await t.query(api.sync.snapshot, { deviceId })).activity
+      .filter((a) => a.kind === 'synced')
+      .map(({ title, at }) => ({ title, at }));
+  const [joined] = await synced();
+  expect(joined.title).toBe('Second');
+  await t.mutation(api.sync.push, {
+    deviceId: second.deviceId,
+    operations: [
+      {
+        id: 'move',
+        sequence: 1,
+        nodeId: 'a',
+        baseRevision: 1,
+        kind: 'update',
+        fields: { parentId: 'other' },
+      },
+    ],
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await t.mutation(api.sync.checkpoint, { deviceId: second.deviceId, cursor: 2 });
+  await t.mutation(api.sync.checkpoint, { deviceId, cursor: 2 });
+  expect(await synced()).toEqual([{ title: 'First', at: expect.any(Number) }, joined]);
 });
