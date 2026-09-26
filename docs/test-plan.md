@@ -30,10 +30,11 @@ Complete [login setup](auth-setup.md), build and load both extensions in disposa
 7. Revoke another browser, then try syncing it; native bookmarks should remain intact. Sign out and sign in again to reconnect to the same account's collection.
 8. End/expire a Better Auth session using the development dashboard. Confirm the extension asks for the password again and retains queued edits. Reauthenticate with the same account and sync them.
 9. Reinstall in a disposable profile and sign in again. Confirm the server collection is not reseeded and merging local bookmarks requires approval.
+10. In Chromium with both local and account bookmark trees, confirm a new installation selects the account toolbar and Other pair. Confirm a connected installation keeps its chosen pair when another appears, then change the selected native root IDs and verify toolbar, other and menu sync continues without reconnecting.
 
 ## Current verification
 
-For the WXT migration, 100 isolated tests, TypeScript and both production builds pass, including from a fresh `npm ci`. The built Chromium and installed Firefox 156 extensions each passed seven headless smoke checks on macOS against an unconfigured-backend HTTP fixture. Chromium debug checks and the Firefox identity/denied-callback fixture passed. Firefox lint reports zero errors and the same four warnings as the old build (minimum-version data collection declarations and bundled React `innerHTML` use).
+For the WXT migration, the isolated suite, TypeScript and both production builds passed, including from a fresh `npm ci`. The built Chromium and installed Firefox 156 extensions each passed seven headless smoke checks on macOS against an unconfigured-backend HTTP fixture. Chromium debug checks and the Firefox identity/denied-callback fixture passed. Firefox lint reports zero errors and the same four warnings as the old build (minimum-version data collection declarations and bundled React `innerHTML` use).
 
 Email/password login replaced Google login after this migration. Successful live login, session renewal, authenticated native browser-to-browser sync and AMO signing were **not exercised by the migration checks**. Follow the manual checklist before release.
 

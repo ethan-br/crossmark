@@ -37,7 +37,8 @@ export interface State {
   failures: number;
   nextRetryAt?: number;
   backup?: Node[];
-  rootSignature?: string;
+  rootSignature?: string; // Read once to migrate the previous root-ID signature.
+  rootSyncing?: Record<string, boolean>;
 }
 export const initialState = (): State => ({
   version: 2,
