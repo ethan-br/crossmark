@@ -48,7 +48,7 @@ npx convex env default set --type preview AUTH_TRUSTED_ORIGINS 'chrome-extension
 
 Use a dedicated Better Auth secret for previews, not the production value. Append any Firefox `moz-extension://` origins you test previews with; see [login setup](auth-setup.md#3-configure-trusted-origins). Each preview has its own user table, so create a test account on it.
 
-Isolated tests and headless smoke checks do not need a backend.
+Isolated tests and headless smoke checks do not need a backend. The Vitest job (`npm test`) uses WXT's fake-browser setup and never opens a browser profile or prompts for OAuth.
 
 Idle previews expire (5 days on Free/Starter, 14 days on paid plans) and count toward the team's deployment limit.
 
