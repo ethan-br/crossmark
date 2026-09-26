@@ -25,6 +25,7 @@ try {
   );
   await page.goto(`chrome-extension://${id}/${popup}`);
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  assert.match(await page.locator('.cm-source-note').innerText(), /signing in replaces these/);
   const command = (message) =>
     page.evaluate((message) => chrome.runtime.sendMessage(message), message);
   const { data: state } = await command({ type: 'state' });

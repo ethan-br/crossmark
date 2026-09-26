@@ -108,15 +108,55 @@ describe('two-browser synchronization and recovery', () => {
       'https://policy.example',
     );
     expect(a.native.nodes.find((n) => n.url === 'https://shared.example')?.id).toBe(seeded.id);
+    const installedId = b.native.nodes.find((n) => n.url === 'https://shared.example')!.id;
     await b.engine.command({ type: 'disconnect' });
-    await b.native.create({
+    const addedWhileSignedOut = await b.native.create({
       parentId: bRoot,
       title: 'New local',
       url: 'https://new-local.example',
     });
+    const create = vi.spyOn(b.native, 'create');
+    const remove = vi.spyOn(b.native, 'remove');
     await b.engine.command({ type: 'connect', credentials, name: 'Second' });
     expect((await ready(b)).snapshot!.nodes).toEqual(original.nodes);
     expect(b.native.nodes.some((n) => n.url === 'https://new-local.example')).toBe(false);
+    expect(b.native.nodes.find((n) => n.url === 'https://shared.example')?.id).toBe(installedId);
+    expect(create).not.toHaveBeenCalled();
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(remove).toHaveBeenCalledWith(addedWhileSignedOut.id);
+  });
+
+  it('reconnects a replaced browser without native writes', async () => {
+    const { b } = await connectPair();
+    const id = b.native.nodes.find((n) => n.url === 'https://one.example')!.id;
+    await b.engine.command({ type: 'disconnect' });
+    const create = vi.spyOn(b.native, 'create');
+    const update = vi.spyOn(b.native, 'update');
+    const move = vi.spyOn(b.native, 'move');
+    const remove = vi.spyOn(b.native, 'remove');
+    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
+    expect((await ready(b)).status).toBe('ready');
+    expect(b.native.nodes.find((n) => n.url === 'https://one.example')?.id).toBe(id);
+    for (const write of [create, update, move, remove]) expect(write).not.toHaveBeenCalled();
+  });
+
+  it('applies a remote edit after sign-out without recreating unchanged bookmarks', async () => {
+    const { a, b } = await connectPair();
+    const before = b.native.nodes.find((n) => n.url === 'https://one.example')!;
+    await b.engine.command({ type: 'disconnect' });
+    const source = a.native.nodes.find((n) => n.url === 'https://one.example')!;
+    await a.native.update(source.id, { title: 'Changed while signed out' });
+    await ready(a);
+    const create = vi.spyOn(b.native, 'create');
+    const update = vi.spyOn(b.native, 'update');
+    const remove = vi.spyOn(b.native, 'remove');
+    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
+    expect((await ready(b)).status).toBe('ready');
+    expect(b.native.nodes.find((n) => n.url === before.url)?.id).toBe(before.id);
+    expect(b.native.nodes.find((n) => n.id === before.id)?.title).toBe('Changed while signed out');
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(create).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
   });
 
   it('does not import local bookmarks from simultaneous new browsers', async () => {
@@ -652,6 +692,9 @@ describe('two-browser synchronization and recovery', () => {
       a.transport,
       a.auth,
     );
+    // A worker revival uses sync() and keeps the persisted backoff.
+    await restarted.sync();
+    expect((await a.store.read()).outbox).toHaveLength(1);
     await restarted.startup();
     expect((await a.store.read()).outbox).toHaveLength(0);
     await ready(b);
@@ -980,7 +1023,7 @@ it('serves live persisted status while a network exchange is pending', async () 
 it('allows pausing and signing out after the session expires', async () => {
   const { a } = await connectPair();
   a.auth.token = async () => {
-    throw new Error('Sign in with Google to continue.');
+    throw new Error('Sign in to continue.');
   };
   await a.engine.command({ type: 'pause' });
   expect((await a.store.read()).paused).toBe(true);
@@ -991,7 +1034,7 @@ it('allows pausing and signing out after the session expires', async () => {
 it('keeps pending edits when reauthentication is needed', async () => {
   const { a } = await connectPair();
   a.auth.token = async () => {
-    throw new Error('Sign in with Google to continue.');
+    throw new Error('Sign in to continue.');
   };
   await a.native.create({
     parentId: '1',

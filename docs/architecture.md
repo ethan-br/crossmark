@@ -14,7 +14,7 @@ Email/password is the only login method. The popup sends the email and password 
 
 ## Native application and recovery
 
-Canonical IDs are independent of native IDs and URLs. Intentional duplicate URLs survive seeding and ordinary edits. The first browser seeds the collection from its local tree. Later browsers retain their original local snapshot for export, remove user nodes under the portable roots with journaled child-first writes, and install the current cloud tree. Managed roots are excluded. A persisted wipe phase prevents an interrupted installation from removing cloud nodes already created on restart.
+Canonical IDs are independent of native IDs and URLs. Intentional duplicate URLs survive seeding and ordinary edits. The first browser seeds the collection from its local tree. Later browsers retain their original local snapshot for export until sign-out or the next large local change, remove user nodes under the portable roots with journaled child-first writes, and install the current cloud tree. Managed roots are excluded. A persisted wipe phase prevents an interrupted installation from removing cloud nodes already created on restart. Sign-out retains native identity mappings and an account identifier, so a reconnect to the same account projects differences without recreating unchanged bookmarks.
 
 The initial snapshot is stored before registration, allowing an interrupted first registration to retry with the same installation ID, account and baseline. Subsequent native edits are then diffed rather than mistaken for part of the uploaded seed. A joining browser never uploads its original local tree. Once installed, native IDs map to canonical IDs and ordinary sync updates only changed nodes.
 

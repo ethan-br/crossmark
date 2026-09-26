@@ -85,6 +85,14 @@ export class Engine {
             `Sign in as ${state.account.email}, or sign out of this installation before using a different account.`,
           );
         }
+        const previouslyInstalled = state.initialized && state.installedAccountId === account.id;
+        if (state.installedAccountId && state.installedAccountId !== account.id) {
+          // Native IDs from another account must not be adopted into this one.
+          state.mappings = {};
+          state.baseline = [];
+          state.initialized = false;
+          delete state.installedAccountId;
+        }
         state.account = account;
         state.needsSignIn = false;
         await this.save(state);
@@ -113,7 +121,11 @@ export class Engine {
         state.registrationPending = false;
         state.status = 'syncing';
         state.joining = result.joining;
+        // A reconnect to the same collection already has native mappings.
+        // Reconcile against them without repeating the first-time wipe.
+        state.joinWiped = result.joining && previouslyInstalled ? true : undefined;
         state.initialized = !result.joining;
+        if (!result.joining) state.installedAccountId = account.id;
         await this.save(state);
         state.snapshot = (await this.client.query(api.sync.snapshot, {
           deviceId: state.deviceId as Id<'devices'>,
@@ -164,9 +176,19 @@ export class Engine {
             throw error;
         }
         await this.auth?.signOut();
-        // The synthetic menu folder remains a native root after sign-out.
-        // Retain only root IDs so reconnecting cannot import those wrappers.
-        state = { ...initialState(), roots: state.roots };
+        // Keep only root and native identity mappings for a later sign-in to
+        // the same account. The session, snapshot and pending work are cleared.
+        state = {
+          ...initialState(),
+          roots: state.roots,
+          ...(state.initialized && state.installedAccountId
+            ? {
+                mappings: state.mappings,
+                initialized: true,
+                installedAccountId: state.installedAccountId,
+              }
+            : {}),
+        };
         await this.save(state);
         return publicState(state);
       }
@@ -414,6 +436,8 @@ export class Engine {
       state.joinWiped = true;
       await this.save(state);
     }
+    // parentFirst emits siblings in target order, so indexed creates do not
+    // need to move their unchanged siblings afterward.
     for (const n of visible) {
       if (!(await check())) return false;
       const existing = state.baseline.find((x) => x.id === n.id);
@@ -467,6 +491,7 @@ export class Engine {
     if (state.joining) {
       state.joining = false;
       state.initialized = true;
+      state.installedAccountId = state.account?.id;
       state.safetyApproved = false;
       delete state.joinWiped;
       delete state.joinLocal;
