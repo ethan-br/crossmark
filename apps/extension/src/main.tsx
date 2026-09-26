@@ -323,8 +323,8 @@ function App() {
                       The first browser saves its bookmarks to the collection. If this account
                       already has a collection, signing in replaces these {stats.bookmarks}{' '}
                       bookmarks and {stats.folders} folders under the supported roots with it. You
-                      can export the old tree from Settings afterward, before signing out or making
-                      a large change.
+                      can export the old tree from Settings afterward as joinRecovery, including
+                      after signing out or making a large change.
                     </p>
                   </>
                 )}

@@ -140,6 +140,67 @@ describe('two-browser synchronization and recovery', () => {
     for (const write of [create, update, move, remove]) expect(write).not.toHaveBeenCalled();
   });
 
+  it('retains the original local tree through large edits, sign-out and reconnect', async () => {
+    const { a, device } = await connectPair();
+    const b = device('Joining');
+    await b.native.create({
+      parentId: '1',
+      title: 'Before joining',
+      url: 'https://original.example',
+    });
+    await b.engine.command({ type: 'connect', credentials, name: 'Joining' });
+    const recovery = (await b.engine.command({ type: 'export' })) as {
+      joinRecovery: { url?: string }[];
+    };
+    expect(recovery.joinRecovery.map((n) => n.url)).toEqual(['https://original.example']);
+    for (let i = 0; i < 51; i++)
+      await b.native.create({
+        parentId: '1',
+        title: `Later ${i}`,
+        url: `https://later.example/${i}`,
+      });
+    await b.engine.sync();
+    expect((await b.store.read()).status).toBe('review');
+    expect(((await b.engine.command({ type: 'export' })) as typeof recovery).joinRecovery).toEqual(
+      recovery.joinRecovery,
+    );
+    await b.engine.command({ type: 'approve' });
+    await ready(b);
+    await ready(a);
+    await b.engine.command({ type: 'disconnect' });
+    expect(((await b.engine.command({ type: 'export' })) as typeof recovery).joinRecovery).toEqual(
+      recovery.joinRecovery,
+    );
+    await b.engine.command({ type: 'connect', credentials, name: 'Joining again' });
+    expect((await ready(b)).status).toBe('ready');
+    expect(((await b.engine.command({ type: 'export' })) as typeof recovery).joinRecovery).toEqual(
+      recovery.joinRecovery,
+    );
+  });
+
+  it('retains recovery when joining an empty cloud collection', async () => {
+    const { device } = await setup();
+    const first = device('Empty first');
+    const second = device('Populated second');
+    await first.engine.command({ type: 'connect', credentials, name: 'Empty first' });
+    await second.native.create({ parentId: '1', title: 'Toolbar', url: 'https://one.example' });
+    await second.native.create({ parentId: '2', title: 'Other', url: 'https://two.example' });
+    await second.engine.command({ type: 'connect', credentials, name: 'Populated second' });
+    expect((await ready(second)).snapshot?.nodes).toEqual([]);
+    expect(second.native.nodes.filter((n) => n.url)).toEqual([]);
+    const exported = (await second.engine.command({ type: 'export' })) as {
+      joinRecovery: { url?: string }[];
+    };
+    expect(exported.joinRecovery.map((n) => n.url).sort()).toEqual([
+      'https://one.example',
+      'https://two.example',
+    ]);
+    await second.engine.command({ type: 'disconnect' });
+    expect(
+      ((await second.engine.command({ type: 'export' })) as typeof exported).joinRecovery,
+    ).toEqual(exported.joinRecovery);
+  });
+
   it('retains native IDs when signing out from state saved before the account marker existed', async () => {
     const { b } = await connectPair();
     const before = await b.store.read();

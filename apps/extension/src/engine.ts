@@ -72,6 +72,7 @@ export class Engine {
           exportedAt: new Date().toISOString(),
           nodes: state.snapshot?.nodes ?? state.baseline,
           localRecovery: state.backup ?? [],
+          joinRecovery: state.joinRecovery ?? [],
           pending: state.outbox,
         };
       if (command.type === 'connect') {
@@ -92,6 +93,7 @@ export class Engine {
           state.baseline = [];
           state.initialized = false;
           delete state.installedAccountId;
+          delete state.joinRecovery;
         }
         state.account = account;
         state.needsSignIn = false;
@@ -121,6 +123,7 @@ export class Engine {
         state.registrationPending = false;
         state.status = 'syncing';
         state.joining = result.joining;
+        if (state.joining && !previouslyInstalled) state.joinRecovery ??= local;
         // A reconnect to the same collection already has native mappings.
         // Reconcile against them without repeating the first-time wipe.
         state.joinWiped = result.joining && previouslyInstalled ? true : undefined;
@@ -176,14 +179,15 @@ export class Engine {
             throw error;
         }
         await this.auth?.signOut();
-        // Keep only root and native identity mappings for a later sign-in to
-        // the same account. The session, snapshot and pending work are cleared.
+        // Keep native identity mappings and the pre-join recovery snapshot for
+        // a later sign-in. The session, snapshot and pending work are cleared.
         const installedAccountId = state.initialized
           ? (state.installedAccountId ?? state.account?.id)
           : undefined;
         state = {
           ...initialState(),
           roots: state.roots,
+          joinRecovery: state.joinRecovery,
           ...(installedAccountId
             ? {
                 mappings: state.mappings,
@@ -309,7 +313,9 @@ export class Engine {
       await this.adapter.recover(state, this.store);
       // The first device seeds the collection. Later devices keep their local
       // snapshot for export, but never upload it while replacing portable roots.
-      if (!state.joining) await this.capture(state);
+      if (state.joining && !state.installedAccountId)
+        state.joinRecovery ??= state.backup ?? state.baseline;
+      else if (!state.joining) await this.capture(state);
       if (state.paused && (await this.stayPaused(state))) return this.pausedExit(state);
       if (!state.joining && state.reviewCount && !state.safetyApproved) {
         debug.event('sync.exchange', 'review');

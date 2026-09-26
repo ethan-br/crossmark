@@ -36,6 +36,8 @@ export interface State {
   // Legacy merge state is cleared after replacement finishes.
   joinLocal?: Node[];
   joinAliases?: Record<string, string>;
+  /** First local tree replaced by a cloud collection; survives disconnect. */
+  joinRecovery?: Node[];
   initialized: boolean;
   safetyApproved: boolean;
   reviewCount?: number;
