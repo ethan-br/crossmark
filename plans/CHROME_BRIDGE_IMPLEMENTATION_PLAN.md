@@ -39,8 +39,6 @@ The connector runs in existing desktop Chrome, a dedicated user-owned profile, o
 - Separate Crossmark device credentials from Chrome's Google session. Neither the helper nor the general backend should receive copied Google cookies/tokens.
 - A bridge joining an existing account must reconcile pre-existing Google bookmarks through a reviewed import plan; it cannot silently replace the account's initialized collection or erase Google's existing collection.
 
-Bridge onboarding needs its own reviewed import flow; it must not use the ordinary browser's wipe-and-replace join path.
-
 ### Delivery boundaries
 
 - Chrome must be running with the correct profile loaded; a visible window is not always necessary.

@@ -81,13 +81,17 @@ export const connect = mutation({
     return { deviceId, joining };
   },
 });
-// Previous extension builds still call this after their merge review. Fail
-// clearly instead of allowing that client to import local bookmarks.
+// Older extensions still call join after showing their former merge review.
+// Return no adopted identities so they install the cloud tree without adding
+// local bookmarks to it. New extensions never call this mutation.
 export const join = mutation({
   args: { deviceId: v.id('devices'), nodes: v.array(node) },
   handler: async (ctx, { deviceId }) => {
-    await authenticate(ctx, deviceId);
-    return fail('Update Crossmark before joining this collection.');
+    const device = await authenticate(ctx, deviceId);
+    if (device.joinMatches) return device.joinMatches;
+    if (device.sequence !== 0) return fail('This browser has already uploaded changes.');
+    await ctx.db.patch(deviceId, { joinMatches: [], lastSeen: Date.now() });
+    return [];
   },
 });
 export const snapshot = query({

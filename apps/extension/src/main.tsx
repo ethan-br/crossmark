@@ -320,10 +320,11 @@ function App() {
                       </span>
                     </div>
                     <p className="cm-secondary cm-source-note">
-                      Your first installation initializes the collection. Additional browsers
-                      replace local bookmarks with the saved collection, even when it is empty.
-                      Export keeps the pre-join bookmarks in joinRecovery, including after
-                      disconnecting.
+                      The first browser saves its bookmarks to the collection. If this account
+                      already has a collection, signing in replaces these {stats.bookmarks}{' '}
+                      bookmarks and {stats.folders} folders under the supported roots with it. You
+                      can export the old tree from Settings afterward as joinRecovery, including
+                      after signing out or making a large change.
                     </p>
                   </>
                 )}

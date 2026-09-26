@@ -59,7 +59,7 @@ WXT opens the extension in a disposable browser profile and reloads it as files 
 
 Login uses an email and password stored by Better Auth in Convex. The backend needs `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` (the extension origins); follow [the setup guide](docs/auth-setup.md). Do not put backend secrets in a `VITE_` or `WXT_` variable or extension file.
 
-Create an account in the first browser, then sign in with the same email and password in each other browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically and replace mutable user bookmarks under the [selected portable roots](docs/v0-decisions.md#initialization-and-joining), including when the collection is empty. The previous local snapshot remains in the recovery export's `joinRecovery` field. Signing out does not delete native bookmarks or the account's server collection.
+Create an account in the first browser, then sign in with the same email and password in each other browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically. Additional installations replace their existing bookmarks under supported portable roots with the saved collection without merging local bookmarks. The original local snapshot remains in the recovery export's `joinRecovery` field after sign-out and later large local changes. See [initialization and joining](docs/v0-decisions.md#initialization-and-joining) for details. Signing out does not delete native bookmarks or the account's server collection.
 
 Use one Crossmark installation per independently native-synced collection. Connecting installations already exchanging bookmarks through a browser vendor's sync can introduce duplicates.
 
@@ -68,7 +68,7 @@ Use one Crossmark installation per independently native-synced collection. Conne
 - Chromium and Firefox Manifest V3 builds, native bookmark/folder edits, moves, ordering and deletion.
 - Email/password login, account-scoped collection access and browser revocation.
 - Durable local operations, idempotent uploads, startup reconciliation and native-write recovery journals.
-- First-browser initialization, cloud replacement on later browsers and large-change approval.
+- First-browser initialization, joining replacement and large-change approval.
 - Overview, activity, browser status, pause/resume and export.
 - Firefox menu/separator handling and Chromium menu-folder projection.
 - Remote polling every 30 seconds, subject to browser sleep and scheduling.

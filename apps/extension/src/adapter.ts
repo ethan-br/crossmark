@@ -56,7 +56,8 @@ export class Adapter {
         if (available.some((n) => n.id === id)) discovered[key] = id;
       }
     } else {
-      const preserveSelection = state.connected || state.registrationPending;
+      const preserveSelection =
+        state.connected || state.registrationPending || !!state.installedAccountId;
       const previousSyncing: Record<string, boolean> = preserveSelection
         ? { ...state.rootSyncing }
         : {};
@@ -285,12 +286,13 @@ export class Adapter {
       const details: Bookmarks.CreateDetails = {
         parentId,
         title: n.title,
+        index: n.order,
         ...(n.url ? { url: n.url } : {}),
       };
       if (this.firefox && n.kind === 'separator') details.type = 'separator';
       const created = await this.api.create(details);
       state.mappings[n.id] = created.id;
-      // Append first; ordering is reconciled separately using the actual index.
+      // Keep the actual browser index for clamped positions and crash recovery.
       j.target = { ...n, order: created.index ?? n.order };
     } else if (j.kind === 'delete') {
       let exists = true;

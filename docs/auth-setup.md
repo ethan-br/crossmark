@@ -50,7 +50,7 @@ Keep `apps/extension/chromium-key.json` stable across local builds. It contains 
 npm run build
 ```
 
-Reload the extension, open it, choose **Create an account**, enter an email, a password of at least 8 characters and a browser name, and submit. In the second browser, sign in with the same email and password and verify its local bookmarks are replaced by the collection. Follow [the manual test checklist](test-plan.md).
+Reload the extension, open it, choose **Create an account**, enter an email, a password of at least 8 characters and a browser name, and submit. In the second browser, sign in with the same email and password and approve its merge if it has bookmarks. Follow [the manual test checklist](test-plan.md).
 
 ## Setting or resetting a password
 
