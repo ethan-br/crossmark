@@ -396,11 +396,23 @@ describe('two-browser synchronization and recovery', () => {
     expect(b.native.nodes.filter((n) => n.url)).toEqual([]);
     const exported = (await b.engine.command({ type: 'export' })) as {
       localRecovery: { url?: string }[];
+      joinRecovery: { url?: string }[];
     };
     expect(exported.localRecovery.map((n) => n.url).sort()).toEqual([
       'https://local.example/1',
       'https://local.example/2',
     ]);
+    expect(exported.joinRecovery).toEqual(exported.localRecovery);
+    for (let i = 0; i < 51; i++)
+      await b.native.create({
+        parentId: '1',
+        title: `Later ${i}`,
+        url: `https://later.example/${i}`,
+      });
+    await b.engine.sync();
+    expect((await b.store.read()).status).toBe('review');
+    const afterReview = (await b.engine.command({ type: 'export' })) as typeof exported;
+    expect(afterReview.joinRecovery).toEqual(exported.joinRecovery);
   });
   it('includes a bookmark created during installation in the local replacement pass', async () => {
     const { device } = await setup();

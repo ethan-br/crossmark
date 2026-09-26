@@ -71,6 +71,7 @@ export class Engine {
           exportedAt: new Date().toISOString(),
           nodes: state.snapshot?.nodes ?? state.baseline,
           localRecovery: state.backup ?? [],
+          joinRecovery: state.joinRecovery ?? [],
           pending: state.outbox,
         };
       if (command.type === 'connect') {
@@ -112,6 +113,7 @@ export class Engine {
         state.registrationPending = false;
         state.status = 'syncing';
         state.joining = result.joining;
+        if (state.joining) state.joinRecovery = local;
         state.initialized = !result.joining;
         await this.save(state);
         state.snapshot = (await this.client.query(api.sync.snapshot, {
@@ -217,6 +219,7 @@ export class Engine {
       // A joining browser installs the collection. Its preexisting bookmarks
       // are only a local recovery snapshot, never an upload to the collection.
       if (state.joining) {
+        state.joinRecovery ??= state.backup ?? state.baseline;
         delete state.reviewCount; // Clear review state from an interrupted older join.
         state.safetyApproved = false;
       } else await this.capture(state);

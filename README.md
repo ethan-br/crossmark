@@ -59,7 +59,7 @@ WXT opens the extension in a disposable browser profile and reloads it as files 
 
 Login uses an email and password stored by Better Auth in Convex. The backend needs `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` (the extension origins); follow [the setup guide](docs/auth-setup.md). Do not put backend secrets in a `VITE_` or `WXT_` variable or extension file.
 
-Create an account in the first browser, then sign in with the same email and password in each other browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically and replace their existing user bookmarks under the [portable roots](docs/v0-decisions.md#initialization-and-joining), including when the collection is empty. The previous local snapshot is included in the recovery export. Signing out does not delete native bookmarks or the account's server collection.
+Create an account in the first browser, then sign in with the same email and password in each other browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically and replace mutable user bookmarks under the [selected portable roots](docs/v0-decisions.md#initialization-and-joining), including when the collection is empty. The previous local snapshot remains in the recovery export's `joinRecovery` field. Signing out does not delete native bookmarks or the account's server collection.
 
 Use one Crossmark installation per independently native-synced collection. Connecting installations already exchanging bookmarks through a browser vendor's sync can introduce duplicates.
 

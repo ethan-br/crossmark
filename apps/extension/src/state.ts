@@ -29,9 +29,10 @@ export interface State {
   snapshot?: Snapshot;
   journal?: Journal;
   joining: boolean;
-  // Cleared after an older installation completes its pending join.
+  // Legacy fields cleared after an older installation completes its pending join.
   joinLocal?: Node[];
   joinAliases?: Record<string, string>;
+  joinRecovery?: Node[];
   initialized: boolean;
   safetyApproved: boolean;
   reviewCount?: number;
