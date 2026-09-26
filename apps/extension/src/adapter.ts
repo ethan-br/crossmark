@@ -37,6 +37,16 @@ export class Adapter {
     const discovered: Record<string, string> = {};
     const rootSyncing: Record<string, boolean> = {};
     const available = roots.filter((n) => !n.unmodifiable && n.folderType !== 'managed');
+    const nativeIds = new Set<string>();
+    const collect = (n: NativeNode) => {
+      nativeIds.add(n.id);
+      for (const child of n.children ?? []) collect(child);
+    };
+    for (const n of tree) collect(n);
+    const oldMobile =
+      !this.firefox && state.roots.mobile && nativeIds.has(state.roots.mobile)
+        ? state.roots.mobile
+        : undefined;
     if (this.firefox) {
       for (const [key, id] of [
         ['toolbar', 'toolbar_____'],
@@ -46,8 +56,11 @@ export class Adapter {
         if (available.some((n) => n.id === id)) discovered[key] = id;
       }
     } else {
-      const previousSyncing = { ...state.rootSyncing };
-      if (state.rootSignature) {
+      const preserveSelection = state.connected || state.registrationPending;
+      const previousSyncing: Record<string, boolean> = preserveSelection
+        ? { ...state.rootSyncing }
+        : {};
+      if (preserveSelection && state.rootSignature) {
         try {
           const signature: unknown = JSON.parse(state.rootSignature);
           if (Array.isArray(signature))
@@ -64,7 +77,7 @@ export class Adapter {
           // An old signature cannot prevent a safe metadata-based remap.
         }
       }
-      for (const key of ['toolbar', 'other']) {
+      for (const key of preserveSelection ? ['toolbar', 'other'] : []) {
         const prior = available.find((n) => n.id === state.roots[key]);
         if (previousSyncing[key] === undefined && prior?.syncing !== undefined)
           previousSyncing[key] = prior.syncing;
@@ -83,7 +96,9 @@ export class Adapter {
         const candidates = available.filter((n) =>
           (types as readonly string[]).includes(n.folderType ?? ''),
         );
-        const prior = candidates.find((n) => n.id === state.roots[key]);
+        const prior = preserveSelection
+          ? candidates.find((n) => n.id === state.roots[key])
+          : undefined;
         const sameCollection = candidates.filter((n) => n.syncing === expectedSyncing);
         const preferred = candidates.filter((n) => n.syncing === true);
         const selected =
@@ -114,7 +129,7 @@ export class Adapter {
         throw new Error('The bookmark toolbar and Other belong to different collections.');
       const other = available.find((n) => n.id === discovered.other);
       const menuFolders = (other?.children ?? []).filter(
-        (n) => !n.url && !n.unmodifiable && n.title === 'Bookmarks Menu',
+        (n) => n.id !== oldMobile && !n.url && !n.unmodifiable && n.title === 'Bookmarks Menu',
       );
       const mapped = (other?.children ?? []).find(
         (n) => n.id === state.roots.menu && !n.url && !n.unmodifiable,
@@ -132,14 +147,7 @@ export class Adapter {
       throw new Error(
         'Your bookmark roots are unavailable. Reconnect after restoring your browser profile.',
       );
-    // Keep an older mobile mapping only to avoid importing its wrapper as a normal folder.
-    const oldMobile =
-      !this.firefox &&
-      roots
-        .find((n) => n.id === discovered.other)
-        ?.children?.find(
-          (n) => n.id === state.roots.mobile && n.title === 'Mobile Bookmarks' && !n.url,
-        )?.id;
+    // Keep an older mobile mapping by native ID, even if the wrapper was moved or renamed.
     state.roots = discovered;
     if (oldMobile) state.roots.mobile = oldMobile;
     if (!this.firefox) state.rootSyncing = rootSyncing;
@@ -197,7 +205,7 @@ export class Adapter {
     }
   }
   projected(n: Node) {
-    return n.parentId !== 'mobile' && (this.firefox || n.kind !== 'separator');
+    return this.firefox || n.kind !== 'separator';
   }
   recover(state: State, store: Store) {
     return debug.trace('bookmarks.recover', () => this.recoverImpl(state, store));

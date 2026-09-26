@@ -1,4 +1,4 @@
-import { type Node, validateTree } from '../model';
+import { type Node, portableNodes, validateTree } from '../model';
 import { parentFirst } from './index';
 
 export interface JoinMatch {
@@ -10,7 +10,7 @@ export interface JoinMatch {
 // See docs/v0-decisions.md for the matching policy.
 export function reconcileJoin(cloud: Node[], local: Node[]) {
   validateTree(local);
-  const canonical = parentFirst(cloud);
+  const canonical = parentFirst(portableNodes(cloud));
   const additions: Node[] = [];
   const matches: JoinMatch[] = [];
   const aliases = new Map<string, string>();

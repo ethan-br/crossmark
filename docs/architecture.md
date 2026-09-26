@@ -24,9 +24,9 @@ Before each native write the engine rereads the tree. Unexpected differences are
 
 ## Browser roots
 
-Chromium maps `bookmarks-bar` and `other` by `folderType`. Where local and account trees coexist, it selects the account pair and retains that selection while those roots exist. Root IDs can change without reconnecting; switching from a selected account tree to a local tree pauses sync. Firefox maps its stable toolbar, unfiled, and menu IDs. Unsupported top-level roots, managed roots, and browser-specific collections are ignored.
+Chromium maps `bookmarks-bar` and `other` by `folderType`. Where local and account trees coexist on a new installation, it selects the account pair. A connected installation retains its previously selected pair, whether local or account. Root IDs can change without reconnecting; switching a connected installation to the other tree pauses sync. Before connection, the selection follows the live browser roots. Firefox maps its stable toolbar, unfiled, and menu IDs. Unsupported top-level roots, managed roots, and browser-specific collections are ignored.
 
-The Chromium folder named “Bookmarks Menu” directly under the selected Other root maps to the canonical menu root. An existing folder is adopted; one is created with a journal only when menu content needs it. A missing mapped menu folder pauses sync while connected. Mobile is outside the portable sync scope: mobile roots and their descendants are neither captured nor projected, and mobile content already in a cloud snapshot does not block the three portable roots. Firefox separators remain in the canonical collection and are omitted from Chromium's projection.
+The Chromium folder named “Bookmarks Menu” directly under the selected Other root maps to the canonical menu root. An existing folder is adopted; one is created with a journal only when menu content needs it. A missing mapped menu folder pauses sync while connected. Mobile is outside the portable sync scope: mobile roots and their descendants are neither captured, matched during joining, nor projected. Legacy cloud mobile content stays in the snapshot without blocking the three portable roots. Firefox separators remain in the canonical collection and are omitted from Chromium's projection.
 
 ## Lifecycle
 

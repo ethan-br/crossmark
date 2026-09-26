@@ -2,23 +2,11 @@ import { debug } from './debug';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
-import { type Node, type Snapshot, validateTree } from '../../../packages/model';
+import { type Node, type Snapshot, portableNodes, validateTree } from '../../../packages/model';
 import { diff, parentFirst } from '../../../packages/sync-core';
 import { Adapter } from './adapter';
 import type { SessionAuth } from './auth';
 import { type State, type Store, initialState, publicState } from './state';
-function portable(nodes: Node[]): Node[] {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  return nodes.filter((node) => {
-    let parent = node.parentId;
-    const seen = new Set<string>();
-    while (byId.has(parent) && !seen.has(parent)) {
-      seen.add(parent);
-      parent = byId.get(parent)!.parentId;
-    }
-    return parent !== 'mobile';
-  });
-}
 export type Command =
   | { type: 'state' }
   | { type: 'connect'; name: string }
@@ -250,7 +238,7 @@ export class Engine {
         if (previous && previous.url !== n.url) delete aliases[n.id];
       }
     const ops = diff(
-      portable(state.baseline).filter((n) => !ignoredBefore.has(n.id)),
+      portableNodes(state.baseline).filter((n) => !ignoredBefore.has(n.id)),
       local.filter((n) => !aliases[n.id]),
       state.sequence,
     );
@@ -421,7 +409,7 @@ export class Engine {
   }
   private async project(state: State, nodes: Node[]): Promise<boolean> {
     const visible = parentFirst(
-      portable(nodes)
+      portableNodes(nodes)
         .filter((n) => this.adapter.projected(n))
         .map((n) => ({ ...n })),
     );
@@ -439,7 +427,7 @@ export class Engine {
     const target = new Map(visible.map((n) => [n.id, n]));
     const check = async () => {
       const current = await this.adapter.read(state);
-      return diff(portable(state.baseline), current, state.sequence).length === 0;
+      return diff(portableNodes(state.baseline), current, state.sequence).length === 0;
     };
     for (const n of visible) {
       if (!(await check())) return false;
@@ -468,7 +456,7 @@ export class Engine {
         });
     }
     // Delete children first. remove() refuses to delete folders containing new local children.
-    for (const n of parentFirst(portable(state.baseline)).reverse())
+    for (const n of parentFirst(portableNodes(state.baseline)).reverse())
       if (!target.has(n.id)) {
         if (!(await check())) return false;
         await this.adapter.write(state, this.store, {

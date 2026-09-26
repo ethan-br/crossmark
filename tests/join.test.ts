@@ -103,4 +103,14 @@ describe('joining content matching', () => {
     expect(result.additions.map((n) => n.id)).toEqual(['new', 'new-s']);
     expect(result.matches).toContainEqual({ localId: 'local-s', nodeId: 's' });
   });
+  it('does not adopt a local bookmark onto a legacy mobile cloud node', () => {
+    const cloud = [
+      folder('mobile-folder', { parentId: 'mobile' }),
+      bookmark('mobile-bookmark', { parentId: 'mobile-folder' }),
+    ];
+    const result = reconcileJoin(cloud, [bookmark('local')]);
+    expect(result.matches).toEqual([{ localId: 'local', nodeId: 'local' }]);
+    expect(result.additions).toEqual([bookmark('local', { revision: 0 })]);
+    expect(cloud).toHaveLength(2);
+  });
 });

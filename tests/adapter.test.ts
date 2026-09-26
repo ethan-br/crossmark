@@ -128,6 +128,21 @@ describe('browser projections', () => {
       'selected bookmark collection is unavailable',
     );
   });
+  it('reselects live roots before connecting when an account tree disappears', async () => {
+    const native = new MemoryBookmarks([
+      { id: '1', title: 'Local toolbar', folderType: 'bookmarks-bar', syncing: false },
+      { id: '2', title: 'Local other', folderType: 'other', syncing: false },
+      { id: '5', title: 'Account toolbar', folderType: 'bookmarks-bar', syncing: true },
+      { id: '6', title: 'Account other', folderType: 'other', syncing: true },
+    ]);
+    const state = initialState();
+    const adapter = new Adapter(native, false);
+    await adapter.read(state);
+    expect(state.roots.toolbar).toBe('5');
+    native.nodes = native.nodes.filter((n) => n.id !== '5' && n.id !== '6');
+    await expect(adapter.read(state)).resolves.toEqual([]);
+    expect(state.roots).toMatchObject({ toolbar: '1', other: '2' });
+  });
   it('keeps a legacy local selection after its IDs change alongside account roots', async () => {
     const native = new MemoryBookmarks([
       { id: '10', title: 'Local toolbar', folderType: 'bookmarks-bar', syncing: false },
@@ -136,6 +151,7 @@ describe('browser projections', () => {
       { id: '6', title: 'Account other', folderType: 'other', syncing: true },
     ]);
     const state = initialState();
+    state.connected = true;
     state.roots = { toolbar: '1', other: '2' };
     state.rootSignature = JSON.stringify([
       ['1', 'bookmarks-bar', false],
@@ -146,6 +162,23 @@ describe('browser projections', () => {
     await new Adapter(native, false).read(state);
     expect(state.roots).toEqual({ toolbar: '10', other: '20' });
     expect(state.rootSyncing).toEqual({ toolbar: false, other: false });
+  });
+  it('keeps a renamed and moved legacy mobile wrapper out of the portable tree', async () => {
+    const native = new MemoryBookmarks();
+    const wrapper = await native.create({ parentId: '2', title: 'Mobile Bookmarks' });
+    await native.create({
+      parentId: wrapper.id,
+      title: 'Phone link',
+      url: 'https://phone.example',
+    });
+    const state = initialState();
+    state.roots.mobile = wrapper.id;
+    const adapter = new Adapter(native, false);
+    await native.update(wrapper.id, { title: 'My phone' });
+    await native.move(wrapper.id, { parentId: '1' });
+    expect(await adapter.read(state)).toEqual([]);
+    expect(state.roots.mobile).toBe(wrapper.id);
+    expect(native.nodes.find((n) => n.url === 'https://phone.example')).toBeDefined();
   });
   it('does not create a mobile folder for mobile-only cloud content', async () => {
     const native = new MemoryBookmarks();

@@ -18,6 +18,7 @@ The same matching policy applies to every browser:
 
 - Bookmarks match by exact URL string anywhere in the collection, regardless of title or folder. No normalization is performed: different schemes, case, trailing slashes, queries and fragments are distinct URLs. A different title alone is not a new bookmark.
 - Folders match by exact, case-sensitive title under the matched parent, starting at the logical toolbar/other/menu root. Different paths are distinct folders; new folders, including empty folders, are imported. Children of matched folders use their cloud parent identity. Mobile content is outside portable sync scope.
+- Legacy cloud mobile nodes remain stored but are excluded from join matching, so a portable local bookmark with the same URL imports into its portable root.
 - Existing cloud duplicates are preserved. Local copies first reuse unused matching cloud entries, preferring the same parent and title, then the same parent, then canonical order. Surplus local copies collapse into those matches. Repeated new URLs or folder paths in the joining tree import once; the first in parent-first order supplies their content.
 - Separators match by kind, matched parent and sibling position. Chromium continues to omit separators from its native projection.
 - New nodes append after existing cloud siblings. Tombstones do not match; a locally present URL whose old record was deleted imports with a new identity. Ordinary edits after joining continue to use identities and can intentionally create duplicate URLs.
