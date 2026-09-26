@@ -140,6 +140,23 @@ describe('two-browser synchronization and recovery', () => {
     for (const write of [create, update, move, remove]) expect(write).not.toHaveBeenCalled();
   });
 
+  it('retains native IDs when signing out from state saved before the account marker existed', async () => {
+    const { b } = await connectPair();
+    const before = await b.store.read();
+    const id = b.native.nodes.find((n) => n.url === 'https://one.example')!.id;
+    delete before.installedAccountId;
+    await b.store.write(before);
+    await b.engine.command({ type: 'disconnect' });
+    expect((await b.store.read()).installedAccountId).toBe(before.account?.id);
+    const create = vi.spyOn(b.native, 'create');
+    const remove = vi.spyOn(b.native, 'remove');
+    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
+    expect((await ready(b)).status).toBe('ready');
+    expect(b.native.nodes.find((n) => n.url === 'https://one.example')?.id).toBe(id);
+    expect(create).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+  });
+
   it('applies a remote edit after sign-out without recreating unchanged bookmarks', async () => {
     const { a, b } = await connectPair();
     const before = b.native.nodes.find((n) => n.url === 'https://one.example')!;
@@ -198,10 +215,12 @@ describe('two-browser synchronization and recovery', () => {
     });
     await b.engine.command({ type: 'connect', credentials, name: 'Firefox' });
     expect((await ready(b)).snapshot!.nodes).toHaveLength(1);
-    expect(b.native.nodes.filter((n) => n.url).map((n) => n.url).sort()).toEqual([
-      'https://cloud.example',
-      'https://mobile-local.example',
-    ]);
+    expect(
+      b.native.nodes
+        .filter((n) => n.url)
+        .map((n) => n.url)
+        .sort(),
+    ).toEqual(['https://cloud.example', 'https://mobile-local.example']);
     for (const id of ['toolbar_____', 'unfiled_____', 'menu________', 'mobile______'])
       expect(b.native.nodes.some((n) => n.id === id)).toBe(true);
   });
@@ -282,6 +301,43 @@ describe('two-browser synchronization and recovery', () => {
     expect(state.outbox).toHaveLength(0);
     expect(chrome.native.nodes.filter((n) => n.title === 'Bookmarks Menu')).toHaveLength(1);
     expect((await ready(firefox)).snapshot!.nodes).toHaveLength(2);
+  });
+
+  it('keeps the selected Chrome bookmark tree and native IDs across sign-out', async () => {
+    const { device } = await setup();
+    const first = device('First');
+    const second = device('Second');
+    await first.native.create({ parentId: '1', title: 'Cloud', url: 'https://cloud.example' });
+    await first.engine.command({ type: 'connect', credentials, name: 'First' });
+    for (const root of second.native.nodes) {
+      root.folderType = root.id === '1' ? 'bookmarks-bar' : 'other';
+      root.syncing = false;
+    }
+    await second.engine.command({ type: 'connect', credentials, name: 'Second' });
+    const installed = second.native.nodes.find((n) => n.url === 'https://cloud.example')!;
+    second.native.nodes.push(
+      { id: '5', title: 'Account toolbar', folderType: 'bookmarks-bar', syncing: true },
+      { id: '6', title: 'Account other', folderType: 'other', syncing: true },
+      {
+        id: 'account-link',
+        parentId: '5',
+        index: 0,
+        title: 'Account',
+        url: 'https://account.example',
+      },
+    );
+    await second.engine.command({ type: 'disconnect' });
+    await second.engine.command({ type: 'state' });
+    const create = vi.spyOn(second.native, 'create');
+    const remove = vi.spyOn(second.native, 'remove');
+    await second.engine.command({ type: 'connect', credentials, name: 'Second' });
+    expect((await ready(second)).roots).toMatchObject({ toolbar: '1', other: '2' });
+    expect(second.native.nodes.find((n) => n.url === 'https://cloud.example')?.id).toBe(
+      installed.id,
+    );
+    expect(second.native.nodes.find((n) => n.id === 'account-link')).toBeDefined();
+    expect(create).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
   });
 
   it('keeps legacy cloud mobile descendants from blocking portable projection', async () => {

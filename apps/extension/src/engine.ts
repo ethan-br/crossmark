@@ -178,14 +178,19 @@ export class Engine {
         await this.auth?.signOut();
         // Keep only root and native identity mappings for a later sign-in to
         // the same account. The session, snapshot and pending work are cleared.
+        const installedAccountId = state.initialized
+          ? (state.installedAccountId ?? state.account?.id)
+          : undefined;
         state = {
           ...initialState(),
           roots: state.roots,
-          ...(state.initialized && state.installedAccountId
+          ...(installedAccountId
             ? {
                 mappings: state.mappings,
                 initialized: true,
-                installedAccountId: state.installedAccountId,
+                installedAccountId,
+                rootSyncing: state.rootSyncing,
+                rootSignature: state.rootSignature,
               }
             : {}),
         };

@@ -56,7 +56,8 @@ export class Adapter {
         if (available.some((n) => n.id === id)) discovered[key] = id;
       }
     } else {
-      const preserveSelection = state.connected || state.registrationPending;
+      const preserveSelection =
+        state.connected || state.registrationPending || !!state.installedAccountId;
       const previousSyncing: Record<string, boolean> = preserveSelection
         ? { ...state.rootSyncing }
         : {};
