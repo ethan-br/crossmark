@@ -85,6 +85,14 @@ export class Engine {
             `Sign in as ${state.account.email}, or sign out of this installation before using a different account.`,
           );
         }
+        const previouslyInstalled = state.initialized && state.installedAccountId === account.id;
+        if (state.installedAccountId && state.installedAccountId !== account.id) {
+          // Native IDs from another account must not be adopted into this one.
+          state.mappings = {};
+          state.baseline = [];
+          state.initialized = false;
+          delete state.installedAccountId;
+        }
         state.account = account;
         state.needsSignIn = false;
         await this.save(state);
@@ -113,11 +121,11 @@ export class Engine {
         state.registrationPending = false;
         state.status = 'syncing';
         state.joining = result.joining;
+        // A reconnect to the same collection already has native mappings.
+        // Reconcile against them without repeating the first-time wipe.
+        state.joinWiped = result.joining && previouslyInstalled ? true : undefined;
         state.initialized = !result.joining;
-        if (state.joining && local.length) {
-          state.status = 'review';
-          state.reviewCount = local.length;
-        }
+        if (!result.joining) state.installedAccountId = account.id;
         await this.save(state);
         state.snapshot = (await this.client.query(api.sync.snapshot, {
           deviceId: state.deviceId as Id<'devices'>,
@@ -168,9 +176,24 @@ export class Engine {
             throw error;
         }
         await this.auth?.signOut();
-        // The synthetic menu folder remains a native root after sign-out.
-        // Retain only root IDs so reconnecting cannot import those wrappers.
-        state = { ...initialState(), roots: state.roots };
+        // Keep only root and native identity mappings for a later sign-in to
+        // the same account. The session, snapshot and pending work are cleared.
+        const installedAccountId = state.initialized
+          ? (state.installedAccountId ?? state.account?.id)
+          : undefined;
+        state = {
+          ...initialState(),
+          roots: state.roots,
+          ...(installedAccountId
+            ? {
+                mappings: state.mappings,
+                initialized: true,
+                installedAccountId,
+                rootSyncing: state.rootSyncing,
+                rootSignature: state.rootSignature,
+              }
+            : {}),
+        };
         await this.save(state);
         return publicState(state);
       }
@@ -184,7 +207,7 @@ export class Engine {
         await this.client.mutation(api.sync.backup, {
           deviceId: state.deviceId as Id<'devices'>,
           nodes: state.backup ?? state.baseline,
-          reason: state.joining ? 'Before joining browser merge' : 'Before large local change',
+          reason: 'Before large local change',
         });
         state.safetyApproved = true;
         state.status = 'ready';
@@ -247,30 +270,19 @@ export class Engine {
     state.status = 'paused';
     await this.save(state);
   }
+  startup() {
+    return this.run(async () => {
+      const state = await this.store.read();
+      if (!state.paused && state.nextRetryAt) {
+        delete state.nextRetryAt;
+        await this.save(state);
+      }
+      await this.exchange();
+    });
+  }
   private async capture(state: State) {
     const local = await this.adapter.read(state);
-    // Surplus join copies stay in the native baseline until journaled deletion.
-    // They must never become cloud creates/updates/deletes during recovery.
-    const aliases = state.joinAliases ?? {};
-    const ignoredBefore = new Set(Object.keys(aliases));
-    for (const n of local)
-      if (aliases[n.id] && n.kind === 'bookmark') {
-        const previous = state.baseline.find((old) => old.id === n.id);
-        // A user may turn a surplus copy into a new bookmark while projection
-        // is interrupted. Import that edit instead of discarding it with the copy.
-        if (previous && previous.url !== n.url) delete aliases[n.id];
-      }
-    const ops = diff(
-      portableNodes(state.baseline).filter((n) => !ignoredBefore.has(n.id)),
-      local.filter((n) => !aliases[n.id]),
-      state.sequence,
-    );
-    for (const op of ops) {
-      if (op.node)
-        op.node = { ...op.node, parentId: aliases[op.node.parentId] ?? op.node.parentId };
-      if (op.fields?.parentId)
-        op.fields.parentId = aliases[op.fields.parentId] ?? op.fields.parentId;
-    }
+    const ops = diff(portableNodes(state.baseline), local, state.sequence);
     debug.event('sync.capture', 'success', { count: ops.length });
     if (ops.length) {
       if (ops.length > 50 || ops.filter((o) => o.kind === 'delete').length > 20) {
@@ -295,51 +307,11 @@ export class Engine {
     debug.event('sync.exchange', 'start');
     try {
       await this.adapter.recover(state, this.store);
-      if (state.joining) {
-        const local = state.joinLocal ?? (await this.adapter.read(state));
-        if (local.length && !state.safetyApproved) {
-          state.status = 'review';
-          state.reviewCount = local.length;
-          debug.event('sync.exchange', 'review');
-          await this.save(state);
-          return;
-        }
-        if (state.paused && (await this.stayPaused(state))) return;
-        await this.authorize();
-        state.joinLocal = local;
-        await this.save(state);
-        const matches = await this.client.mutation(api.sync.join, {
-          deviceId: state.deviceId as Id<'devices'>,
-          nodes: local,
-        });
-        const adopted = new Map<string, string>();
-        const used = new Set<string>();
-        state.joinAliases = {};
-        const mappings = { ...state.mappings };
-        for (const { localId, nodeId } of matches) {
-          if (used.has(nodeId)) {
-            state.joinAliases[localId] = nodeId;
-            continue;
-          }
-          used.add(nodeId);
-          adopted.set(localId, nodeId);
-          delete mappings[localId];
-          mappings[nodeId] = state.mappings[localId];
-        }
-        state.mappings = mappings;
-        state.baseline = local.map((n) => ({
-          ...n,
-          id: adopted.get(n.id) ?? n.id,
-          parentId: adopted.get(n.parentId) ?? n.parentId,
-        }));
-        delete state.joinLocal;
-        state.joining = false;
-        state.initialized = true;
-        await this.save(state);
-      }
-      await this.capture(state);
+      // The first device seeds the collection. Later devices keep their local
+      // snapshot for export, but never upload it while replacing portable roots.
+      if (!state.joining) await this.capture(state);
       if (state.paused && (await this.stayPaused(state))) return this.pausedExit(state);
-      if (state.reviewCount && !state.safetyApproved) {
+      if (!state.joining && state.reviewCount && !state.safetyApproved) {
         debug.event('sync.exchange', 'review');
         state.status = 'review';
         await this.save(state);
@@ -376,7 +348,12 @@ export class Engine {
         const settled = await this.project(state, remote.nodes);
         debug.event('sync.project', settled ? 'success' : 'local-change', { attempt: passes + 1 });
         if (!settled) {
-          await this.capture(state);
+          if (state.joining) {
+            // A native edit during installation is part of the local tree to
+            // replace, including after a journaled partial projection.
+            state.baseline = await this.adapter.read(state);
+            await this.save(state);
+          } else await this.capture(state);
           if ((state as State).status === 'review' && !state.safetyApproved) return;
           continue;
         }
@@ -450,6 +427,22 @@ export class Engine {
       const current = await this.adapter.read(state);
       return diff(portableNodes(state.baseline), current, state.sequence).length === 0;
     };
+    if (state.joining && !state.joinWiped) {
+      // Remove only mapped user nodes. Native roots and browser-owned folders
+      // are absent from the baseline and cannot enter this deletion list.
+      for (const n of parentFirst(portableNodes(state.baseline)).reverse()) {
+        if (!(await check())) return false;
+        await this.adapter.write(state, this.store, {
+          kind: 'delete',
+          target: n,
+          nativeId: state.mappings[n.id],
+        });
+      }
+      state.joinWiped = true;
+      await this.save(state);
+    }
+    // parentFirst emits siblings in target order, so indexed creates do not
+    // need to move their unchanged siblings afterward.
     for (const n of visible) {
       if (!(await check())) return false;
       const existing = state.baseline.find((x) => x.id === n.id);
@@ -469,7 +462,9 @@ export class Engine {
     for (const n of visible) {
       if (!(await check())) return false;
       const existing = state.baseline.find((x) => x.id === n.id)!;
-      if (existing.parentId !== n.parentId || existing.order !== n.order)
+      // Move across folders before fixing sibling positions. Removing a node
+      // shifts its old siblings into place without native calls for them.
+      if (existing.parentId !== n.parentId)
         await this.adapter.write(state, this.store, {
           kind: 'move',
           target: n,
@@ -498,6 +493,16 @@ export class Engine {
     }
     if (!(await check())) return false;
     state.baseline = visible;
+    if (state.joining) {
+      state.joining = false;
+      state.initialized = true;
+      state.installedAccountId = state.account?.id;
+      state.safetyApproved = false;
+      delete state.joinWiped;
+      delete state.joinLocal;
+      delete state.joinAliases;
+      delete state.reviewCount;
+    }
     await this.save(state);
     return true;
   }

@@ -24,7 +24,7 @@ import {
   LoaderCircle,
   LogOut,
 } from 'lucide-react';
-import { type Activity, count, alive } from '../../../packages/model';
+import { type Activity, count } from '../../../packages/model';
 import { type State, initialState } from './state';
 import type { Command } from './engine';
 import packageJson from '../../../package.json';
@@ -186,7 +186,7 @@ function App() {
     },
     review: {
       icon: FolderInput,
-      title: state.joining ? 'Review bookmark merge' : 'Review pending changes',
+      title: 'Review pending changes',
       description: `${state.reviewCount ?? pending} items require approval.`,
       connection: 'Review required',
     },
@@ -320,8 +320,11 @@ function App() {
                       </span>
                     </div>
                     <p className="cm-secondary cm-source-note">
-                      Your first installation initializes the collection. Additional browsers
-                      require approval before merging existing bookmarks.
+                      The first browser saves its bookmarks to the collection. If this account
+                      already has a collection, signing in replaces these {stats.bookmarks}{' '}
+                      bookmarks and {stats.folders} folders under the supported roots with it. You
+                      can export the old tree from Settings afterward, before signing out or making
+                      a large change.
                     </p>
                   </>
                 )}
@@ -384,13 +387,9 @@ function App() {
                   </div>
                   {status === 'review' ? (
                     <div className="cm-permission">
-                      <div className="cm-item-title">
-                        {state.joining ? 'Merge collections' : 'Approve changes'}
-                      </div>
+                      <div className="cm-item-title">Approve changes</div>
                       <p>
-                        {state.joining
-                          ? `${state.reviewCount} local items will be added to ${alive(state.snapshot?.nodes ?? []).length} saved items. Existing bookmarks are preserved, including duplicates.`
-                          : `${pending} pending operations will update your other browsers. Export includes the operations and the previous snapshot.`}
+                        {`${pending} pending operations will update your other browsers. Export includes the operations and the previous snapshot.`}
                       </p>
                       <p>A recovery snapshot is saved before applying changes.</p>
                       <div className="cm-actions">
@@ -404,7 +403,7 @@ function App() {
                           onClick={() => act({ type: 'approve' })}
                         >
                           <Check />
-                          {state.joining ? 'Merge collections' : 'Approve'}
+                          Approve
                         </button>
                       </div>
                     </div>

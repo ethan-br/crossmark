@@ -55,6 +55,10 @@ try {
   );
   assert.ok(state.baseline.some((n) => n.kind === 'separator'));
   assert.equal((await driver.findElements(By.css('input'))).length, 3);
+  assert.match(
+    await driver.findElement(By.css('.cm-source-note')).getText(),
+    /signing in replaces these/,
+  );
   await driver.findElement(By.css('#email')).sendKeys('smoke@example.com');
   await driver.findElement(By.css('#password')).sendKeys('not-a-real-password');
   await driver.findElement(By.xpath('//button[normalize-space(.)="Sign in"]')).click();

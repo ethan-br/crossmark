@@ -31,6 +31,9 @@ export interface State {
   snapshot?: Snapshot;
   journal?: Journal;
   joining: boolean;
+  joinWiped?: boolean;
+  installedAccountId?: string;
+  // Legacy merge state is cleared after replacement finishes.
   joinLocal?: Node[];
   joinAliases?: Record<string, string>;
   initialized: boolean;

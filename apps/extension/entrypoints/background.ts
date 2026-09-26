@@ -99,8 +99,8 @@ export default defineBackground(() => {
     if (!alarm.name.startsWith('crossmark-')) return;
     await engine.sync();
   });
-  browser.runtime.onStartup.addListener(schedule);
-  browser.runtime.onInstalled.addListener(schedule);
+  browser.runtime.onStartup.addListener(() => void engine.startup());
+  browser.runtime.onInstalled.addListener(() => void engine.startup());
   const commands = new Set([
     'state',
     'connect',
@@ -154,5 +154,6 @@ export default defineBackground(() => {
   void storage.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' });
   void browser.alarms.create('crossmark-heartbeat', { periodInMinutes: 0.5 });
   void store.read().then((s) => badge(publicState(s)));
+  // Worker revivals should keep retry backoff; only real browser starts bypass it.
   void engine.sync();
 });

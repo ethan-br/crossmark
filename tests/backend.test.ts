@@ -39,18 +39,12 @@ describe('Convex authorization and durable operations', () => {
     await expect(unauthenticated.query(api.sync.snapshot, { deviceId })).rejects.toThrow(
       'Unauthenticated',
     );
-    await expect(unauthenticated.mutation(api.sync.join, { deviceId, nodes: [] })).rejects.toThrow(
-      'Unauthenticated',
-    );
     const expired = await account('expired@example.com', Date.now() - 1000);
     await expect(expired.t.query(api.sync.snapshot, { deviceId })).rejects.toThrow(
       'Unauthenticated',
     );
     await t.mutation(api.sync.revoke, { deviceId, targetDeviceId: deviceId });
     await expect(t.query(api.sync.snapshot, { deviceId })).rejects.toThrow('disconnected');
-    await expect(t.mutation(api.sync.join, { deviceId, nodes: [] })).rejects.toThrow(
-      'disconnected',
-    );
   });
   it('isolates accounts on reads, writes and revocation', async () => {
     const { t, account, deviceId } = await setup();
@@ -66,9 +60,6 @@ describe('Convex authorization and durable operations', () => {
     );
     await expect(
       t.mutation(api.sync.push, { deviceId: second.deviceId, operations: [] }),
-    ).rejects.toThrow('disconnected');
-    await expect(
-      t.mutation(api.sync.join, { deviceId: second.deviceId, nodes: [] }),
     ).rejects.toThrow('disconnected');
     await expect(
       t.mutation(api.sync.revoke, { deviceId, targetDeviceId: second.deviceId }),
@@ -87,6 +78,22 @@ describe('Convex authorization and durable operations', () => {
     });
     expect(second.joining).toBe(true);
     expect((await t.query(api.sync.snapshot, { deviceId: second.deviceId })).nodes).toHaveLength(1);
+  });
+  it('does not import local nodes when an older joining extension calls join', async () => {
+    const { t } = await setup();
+    const second = await t.mutation(api.sync.connect, {
+      installationId: crypto.randomUUID(),
+      name: 'Second',
+      browser: 'Firefox',
+      nodes: [],
+    });
+    const local = { ...node, id: 'local', url: 'https://local.example' };
+    expect(await t.mutation(api.sync.join, { deviceId: second.deviceId, nodes: [local] })).toEqual(
+      [],
+    );
+    expect((await t.query(api.sync.snapshot, { deviceId: second.deviceId })).nodes).toEqual([
+      { ...node, revision: 1, deleted: false },
+    ]);
   });
   it('deduplicates repeated upload after lost acknowledgment', async () => {
     const { t, deviceId } = await setup();
