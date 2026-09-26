@@ -241,7 +241,6 @@ function App() {
                 onClick={() => setTab(t)}
               >
                 {t[0].toUpperCase() + t.slice(1)}
-                {t === 'browsers' && <span className="cm-tab-count">{browsers.length}</span>}
               </button>
             ))}
           </nav>
@@ -323,7 +322,8 @@ function App() {
                     <p className="cm-secondary cm-source-note">
                       Your first installation initializes the collection. Additional browsers
                       replace local bookmarks with the saved collection, even when it is empty.
-                      Export retains the earlier local tree.
+                      Export keeps the pre-join bookmarks in joinRecovery, including after
+                      disconnecting.
                     </p>
                   </>
                 )}
@@ -423,7 +423,9 @@ function App() {
                       <div className="cm-actions">
                         <button
                           className="cm-primary"
-                          disabled={busy || status === 'syncing'}
+                          disabled={
+                            busy || status === 'syncing' || (state.paused && !state.needsSignIn)
+                          }
                           onClick={() =>
                             state.needsSignIn ? setReauth(true) : act({ type: 'sync' })
                           }
@@ -467,46 +469,74 @@ function App() {
               {tab === 'browsers' && (
                 <section className="cm-content" aria-label="Connected browsers">
                   <h2 className="cm-panel-title">Connected browsers</h2>
-                  {browsers.map((d) => (
-                    <div className="cm-browser-row" key={d.id}>
-                      <span className="cm-browser-symbol">
-                        <Globe />
-                      </span>
-                      <div className="cm-event-text">
-                        <div className="cm-item-title">
-                          {d.name}
-                          {d.id === state.deviceId && <span className="cm-tag">This browser</span>}
+                  {browsers.map((d) => {
+                    const self = d.id === state.deviceId;
+                    const paused = self ? state.paused : d.paused;
+                    const lastSync = self ? state.lastSync : d.lastSeen;
+                    return (
+                      <div className="cm-browser-row" key={d.id}>
+                        <span className="cm-browser-symbol">
+                          <Globe />
+                        </span>
+                        <div className="cm-event-text">
+                          <div className="cm-item-title">
+                            {d.name}
+                            {self && <span className="cm-tag">This browser</span>}
+                          </div>
+                          <div className="cm-secondary">
+                            {paused
+                              ? 'Paused'
+                              : self && status !== 'ready'
+                                ? details.title
+                                : lastSync
+                                  ? `Last synced ${relative(lastSync)}`
+                                  : 'Not synced yet'}
+                          </div>
                         </div>
-                        <div className="cm-secondary">
-                          {d.browser} · last seen {relative(d.lastSeen)}
-                        </div>
-                      </div>
-                      <div className="cm-browser-state">
-                        {d.id === state.deviceId
-                          ? details.connection
-                          : d.cursor < (state.snapshot?.revision ?? 0)
-                            ? `${state.snapshot!.revision - d.cursor} changes behind`
-                            : 'Applied'}
-                        {d.id !== state.deviceId && (
+                        <div className="cm-browser-actions">
                           <button
-                            className="cm-link cm-remove"
+                            className="cm-link"
+                            aria-label={`${paused ? 'Resume' : 'Pause'} ${d.name}`}
                             disabled={busy}
                             onClick={() =>
-                              setConfirm({
-                                title: 'Disconnect browser?',
-                                body: `${d.name} will stop syncing. Its bookmarks remain in the browser.`,
-                                command: { type: 'revoke', deviceId: d.id },
-                                label: 'Disconnect',
-                              })
+                              act({ type: 'pauseDevice', deviceId: d.id, paused: !paused })
                             }
                           >
+                            {paused ? <Play /> : <Pause />}
+                            {paused ? 'Resume' : 'Pause'}
+                          </button>
+                          <button
+                            className="cm-link cm-remove"
+                            aria-label={`Disconnect ${d.name}`}
+                            disabled={busy}
+                            onClick={() =>
+                              setConfirm(
+                                self
+                                  ? {
+                                      title: 'Disconnect this browser?',
+                                      body: 'This browser stops syncing, is removed from your connected browsers, and signs out. Its bookmarks stay here. Sign in again to reconnect.',
+                                      command: { type: 'disconnect' },
+                                      label: 'Disconnect',
+                                    }
+                                  : {
+                                      title: `Disconnect ${d.name}?`,
+                                      body: `${d.name} stops syncing and is removed from your connected browsers. Its bookmarks stay in that browser. To reconnect it, sign out and sign in again on that browser.`,
+                                      command: { type: 'revoke', deviceId: d.id },
+                                      label: 'Disconnect',
+                                    },
+                              )
+                            }
+                          >
+                            <X />
                             Disconnect
                           </button>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  <p className="cm-note">Closed browsers apply pending changes when reopened.</p>
+                    );
+                  })}
+                  <p className="cm-note">
+                    Other browsers pick up a pause or disconnect the next time they sync.
+                  </p>
                   <div className="cm-permission">
                     <div className="cm-item-title">Connect another browser</div>
                     <p>Install Crossmark and sign in with {state.account?.email}.</p>
