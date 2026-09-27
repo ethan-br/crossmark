@@ -36,6 +36,9 @@ describe('Convex authorization and durable operations', () => {
   });
   it('rejects unauthenticated, expired sessions and revoked devices', async () => {
     const { t, unauthenticated, account, deviceId } = await setup();
+    await expect(unauthenticated.query(api.sync.signal, { deviceId })).rejects.toThrow(
+      'Unauthenticated',
+    );
     await expect(unauthenticated.query(api.sync.snapshot, { deviceId })).rejects.toThrow(
       'Unauthenticated',
     );
@@ -45,6 +48,7 @@ describe('Convex authorization and durable operations', () => {
     );
     await t.mutation(api.sync.revoke, { deviceId, targetDeviceId: deviceId });
     await expect(t.query(api.sync.snapshot, { deviceId })).rejects.toThrow('disconnected');
+    await expect(t.query(api.sync.signal, { deviceId })).rejects.toThrow('disconnected');
   });
   it('isolates accounts on reads, writes and revocation', async () => {
     const { t, account, deviceId } = await setup();
@@ -56,6 +60,9 @@ describe('Convex authorization and durable operations', () => {
       nodes: [],
     });
     await expect(t.query(api.sync.snapshot, { deviceId: second.deviceId })).rejects.toThrow(
+      'disconnected',
+    );
+    await expect(t.query(api.sync.signal, { deviceId: second.deviceId })).rejects.toThrow(
       'disconnected',
     );
     await expect(
@@ -138,6 +145,7 @@ describe('Convex authorization and durable operations', () => {
     await t.mutation(api.sync.push, { deviceId, operations });
     const snapshot = await t.query(api.sync.snapshot, { deviceId });
     expect(snapshot.revision).toBe(2);
+    expect((await t.query(api.sync.signal, { deviceId })).revision).toBe(2);
     expect(snapshot.activity).toEqual([expect.objectContaining({ kind: 'moved', title: 'A' })]);
     expect(snapshot.nodes[0].parentId).toBe('other');
   });

@@ -150,6 +150,29 @@ export const snapshot = query({
     };
   },
 });
+// Keep the live subscription small; the extension fetches the full snapshot
+// through its journaled exchange only when something relevant changes.
+export const signal = query({
+  args: { deviceId: v.id('devices') },
+  handler: async (ctx, { deviceId }) => {
+    const device = await authenticate(ctx, deviceId);
+    const collection = await ctx.db.get(device.collectionId);
+    if (!collection) return fail('Collection unavailable.');
+    const devices = await ctx.db
+      .query('devices')
+      .withIndex('by_collection', (q) => q.eq('collectionId', device.collectionId))
+      .collect();
+    return {
+      revision: collection.revision,
+      paused: device.paused ?? false,
+      devices: devices.map((d) => ({
+        id: d._id,
+        paused: d.paused ?? false,
+        revoked: d.revoked,
+      })),
+    };
+  },
+});
 export const push = mutation({
   args: { deviceId: v.id('devices'), operations: v.array(operation) },
   handler: async (ctx, { deviceId, operations }) => {

@@ -9,6 +9,7 @@ interface PublicEnvironment {
 export function extensionManifest(browser: string, env: PublicEnvironment): UserManifest {
   const origin = env.VITE_CONVEX_URL || 'http://127.0.0.1:3210';
   const siteOrigin = env.VITE_CONVEX_SITE_URL || 'http://127.0.0.1:3211';
+  const socketOrigin = origin.replace(/^http/, 'ws');
   for (const endpoint of [origin, siteOrigin]) {
     const parsed = new URL(endpoint);
     if (
@@ -28,7 +29,7 @@ export function extensionManifest(browser: string, env: PublicEnvironment): User
     icons,
     action: { default_icon: icons },
     content_security_policy: {
-      extension_pages: `script-src 'self'; object-src 'self'; connect-src 'self' ${origin} ${siteOrigin}`,
+      extension_pages: `script-src 'self'; object-src 'self'; connect-src 'self' ${origin} ${socketOrigin} ${siteOrigin}`,
     },
     ...(browser === 'firefox'
       ? {

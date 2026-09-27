@@ -30,6 +30,6 @@ The Chromium folder named “Bookmarks Menu” directly under the selected Other
 
 ## Lifecycle
 
-All listeners register synchronously. An alarm polls every 30 seconds; the browser may defer it during sleep. Failures persist a bounded exponential retry time with jitter. Startup and explicit retry bypass the wait while respecting Pause. Incoming changes are pulled durably; no permanent worker or WebSocket lifetime is assumed.
+All listeners register synchronously. A background Convex subscription to `sync.signal` watches collection revisions and browser pause/revocation status, then runs the same durable exchange used by native bookmark events. The background re-establishes the subscription from persisted state whenever the worker starts. A 30-second alarm recovers missed changes after network loss or worker sleep; the browser may defer it during sleep. A subscription error closes its socket and schedules a fresh connection. Exchange failures persist a bounded exponential retry time with jitter. Startup and explicit retry bypass the wait while respecting Pause. Correctness does not depend on a permanent worker or WebSocket lifetime.
 
 Reference APIs: [Chrome bookmarks](https://developer.chrome.com/docs/extensions/reference/api/bookmarks), [Chrome alarms](https://developer.chrome.com/docs/extensions/reference/api/alarms), [Firefox background scripts](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background), and [Convex local development](https://docs.convex.dev/cli/local-deployments).

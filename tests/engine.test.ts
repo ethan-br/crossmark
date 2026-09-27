@@ -863,7 +863,15 @@ describe('two-browser synchronization and recovery', () => {
     });
     await b.engine.sync();
     expect((await b.store.read()).status).toBe('error');
+    expect((await b.store.read()).needsSignIn).toBe(true);
     expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
+  });
+  it('reports revocation even while this browser is paused', async () => {
+    const { a, b } = await connectPair();
+    await b.engine.command({ type: 'pause' });
+    await a.engine.command({ type: 'revoke', deviceId: (await b.store.read()).deviceId! });
+    await b.engine.sync();
+    expect((await b.store.read()).needsSignIn).toBe(true);
   });
 });
 

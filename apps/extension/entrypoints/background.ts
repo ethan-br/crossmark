@@ -5,6 +5,7 @@ import browser, { type Runtime } from 'webextension-polyfill';
 import { PasswordSession } from '../src/auth';
 import { Adapter } from '../src/adapter';
 import { Engine, type Command } from '../src/engine';
+import { RemoteWatch } from '../src/remote-watch';
 import { initialState, publicState, type State, type Store } from '../src/state';
 
 export default defineBackground(() => {
@@ -26,18 +27,29 @@ export default defineBackground(() => {
     },
   };
   const adapter = new Adapter(browser.bookmarks, /Firefox/.test(navigator.userAgent));
+  const convexURL = import.meta.env.VITE_CONVEX_URL || 'http://127.0.0.1:3210';
+  const auth = new PasswordSession(
+    convexURL,
+    import.meta.env.VITE_CONVEX_SITE_URL || 'http://127.0.0.1:3211',
+  );
+  let remoteWatch: RemoteWatch | undefined;
   const engine = new Engine(
     store,
     adapter,
-    import.meta.env.VITE_CONVEX_URL || 'http://127.0.0.1:3210',
+    convexURL,
     (state) => {
       void badge(state);
+      remoteWatch?.update(state);
     },
     undefined,
-    new PasswordSession(
-      import.meta.env.VITE_CONVEX_URL || 'http://127.0.0.1:3210',
-      import.meta.env.VITE_CONVEX_SITE_URL || 'http://127.0.0.1:3211',
-    ),
+    auth,
+  );
+  remoteWatch = new RemoteWatch(
+    convexURL,
+    auth,
+    store,
+    () => engine.sync(),
+    () => engine.whenIdle(),
   );
   // Queue startup behind the persisted opt-in; listeners still register synchronously.
   void engine.run(() => diagnostics.ready);
@@ -157,7 +169,10 @@ export default defineBackground(() => {
   };
   void storage.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' });
   void browser.alarms.create('crossmark-heartbeat', { periodInMinutes: 0.5 });
-  void store.read().then((s) => badge(publicState(s)));
+  void store.read().then((s) => {
+    void badge(publicState(s));
+    remoteWatch.update(s);
+  });
   // Worker revivals should keep retry backoff; only real browser starts bypass it.
   void engine.sync();
 });
