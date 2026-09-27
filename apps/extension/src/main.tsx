@@ -17,7 +17,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
 import { activityLines, command, statusLabel } from './popup/shared';
 import { ActivityList, BrandMark, StatusText } from './popup/parts';
 import { Overview } from './popup/overview';
@@ -78,6 +77,10 @@ function App() {
     } finally {
       setBusy(false);
     }
+  }
+  function openConfirm(confirmation: Confirmation) {
+    setError('');
+    setConfirm(confirmation);
   }
   async function exportData() {
     try {
@@ -159,28 +162,22 @@ function App() {
           onValueChange={(value) => setTab(value as Tab)}
           className="min-h-0 flex-1 gap-0"
         >
-          <div className="flex shrink-0 items-center border-b px-4">
-            <TabsList aria-label="Extension navigation">
+          <div className="shrink-0 border-b px-4">
+            <TabsList aria-label="Extension navigation" className="flex w-full">
               {tabs.map((t) => (
                 <TabsTrigger key={t} value={t}>
                   {t[0].toUpperCase() + t.slice(1)}
                 </TabsTrigger>
               ))}
+              <TabsTrigger
+                value="settings"
+                aria-label="Settings"
+                title="Settings"
+                className="ml-auto px-1 data-[state=active]:text-primary"
+              >
+                <Settings2 />
+              </TabsTrigger>
             </TabsList>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Settings"
-              aria-pressed={tab === 'settings'}
-              className={cn(
-                '-mr-2 ml-auto',
-                tab === 'settings' &&
-                  'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
-              )}
-              onClick={() => setTab(tab === 'settings' ? 'overview' : 'settings')}
-            >
-              <Settings2 />
-            </Button>
           </div>
           {alert}
           <TabsContent value="overview" className="flex min-h-0 flex-col">
@@ -202,17 +199,17 @@ function App() {
           <TabsContent value="browsers" className="min-h-0">
             <ScrollArea className="h-full">
               <div className="px-4 py-1">
-                <Browsers state={state} busy={busy} act={act} confirm={setConfirm} />
+                <Browsers state={state} busy={busy} act={act} confirm={openConfirm} />
               </div>
             </ScrollArea>
           </TabsContent>
-          {tab === 'settings' && (
-            <ScrollArea className="min-h-0 flex-1" aria-label="Settings">
+          <TabsContent value="settings" className="min-h-0">
+            <ScrollArea className="h-full">
               <div className="p-4">
-                <Settings state={state} busy={busy} onExport={exportData} confirm={setConfirm} />
+                <Settings state={state} busy={busy} onExport={exportData} confirm={openConfirm} />
               </div>
             </ScrollArea>
-          )}
+          </TabsContent>
         </Tabs>
       )}
       <AlertDialog open={!!confirm} onOpenChange={(open) => !open && setConfirm(undefined)}>
@@ -221,7 +218,11 @@ function App() {
             <AlertDialogTitle>{confirm?.title}</AlertDialogTitle>
             <AlertDialogDescription>{confirm?.body}</AlertDialogDescription>
           </AlertDialogHeader>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <Button

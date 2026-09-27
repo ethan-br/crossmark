@@ -14,6 +14,7 @@ export function BrandMark() {
 
 const tones: Record<Tone, string> = {
   accent: 'bg-primary',
+  attention: 'bg-primary',
   muted: 'bg-muted-foreground',
   danger: 'bg-destructive',
 };
@@ -25,7 +26,11 @@ export function StatusText({ label, tone, pulse }: { label: string; tone: Tone; 
       aria-live="polite"
       className={cn(
         'flex items-center gap-2 text-xs font-medium',
-        tone === 'danger' ? 'text-destructive' : 'text-muted-foreground',
+        tone === 'danger'
+          ? 'text-destructive'
+          : tone === 'attention'
+            ? 'text-primary'
+            : 'text-muted-foreground',
       )}
     >
       <span className={cn('size-1.5 rotate-45', tones[tone], pulse && 'animate-pulse')} />

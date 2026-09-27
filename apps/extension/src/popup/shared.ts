@@ -32,7 +32,7 @@ export const activityLines: Record<Activity['kind'], { icon: typeof RefreshCw; v
 };
 
 export type Status = State['status'];
-export type Tone = 'accent' | 'muted' | 'danger';
+export type Tone = 'accent' | 'attention' | 'muted' | 'danger';
 
 export function statusLabel(state: State): { label: string; tone: Tone } {
   const status: Status = state.paused ? 'paused' : state.status;
@@ -45,7 +45,7 @@ export function statusLabel(state: State): { label: string; tone: Tone } {
       label: state.needsSignIn ? 'Sign-in required' : 'Sync failed',
       tone: 'danger' as const,
     },
-    review: { label: 'Review needed', tone: 'accent' as const },
+    review: { label: 'Review needed', tone: 'attention' as const },
     setup: { label: 'Not signed in', tone: 'muted' as const },
   }[status];
 }

@@ -24,6 +24,8 @@ export function Browsers({
   confirm: (confirmation: Confirmation) => void;
 }) {
   const browsers = state.snapshot?.devices.filter((d) => !d.revoked) ?? [];
+  if (!browsers.length)
+    return <p className="py-8 text-center text-sm text-muted-foreground">No browsers yet.</p>;
   return (
     <ul className="divide-y divide-border">
       {browsers.map((d) => {
@@ -41,7 +43,10 @@ export function Browsers({
               <Globe />
             </RowIcon>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{d.name}</p>
+              <p className="truncate text-sm font-medium">
+                {d.name}
+                {self && <span className="sr-only"> (current browser)</span>}
+              </p>
               <p className="text-xs text-muted-foreground">
                 {paused
                   ? 'Paused'
