@@ -78,9 +78,7 @@ it('reports rejected credentials without storing a session', async () => {
       { status: 401 },
     ),
   );
-  await expect(session().signIn(credentials)).rejects.toThrow(
-    /Invalid email or password\. Accounts created with Google sign-in/,
-  );
+  await expect(session().signIn(credentials)).rejects.toThrow(/^Invalid email or password\.$/);
   expect(await storedSession()).toBeUndefined();
 });
 
