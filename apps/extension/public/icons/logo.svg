@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Crossmark</title>
+  <rect width="512" height="512" fill="#fbc629"/>
+  <path fill="#000" d="M385.468089 126.646295 A179.755336 179.755336 0 1 0 240 412 L240 356 A123.755336 123.755336 0 1 1 304.531911 126.646295 Z"/>
+  <path fill="#000" d="M238 142 H452 V457.580645 L238 285 Z"/>
+  <path fill="#000" d="M252 334 L314 384 L252 434 Z" stroke="#000" stroke-width="28" stroke-linejoin="miter" stroke-linecap="butt"/>
+</svg>
