@@ -78,8 +78,16 @@ it('reports rejected credentials without storing a session', async () => {
       { status: 401 },
     ),
   );
-  await expect(session().signIn(credentials)).rejects.toThrow(
-    /Invalid email or password\. Accounts created with Google sign-in/,
+  await expect(session().signIn(credentials)).rejects.toThrow(/^Invalid email or password\.$/);
+  expect(await storedSession()).toBeUndefined();
+});
+
+it('reports a duplicate account without storing a session', async () => {
+  fetchMock.mockResolvedValue(
+    Response.json({ code: 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL' }, { status: 422 }),
+  );
+  await expect(session().signIn({ ...credentials, create: true })).rejects.toThrow(
+    /^An account with this email already exists\. Sign in instead\.$/,
   );
   expect(await storedSession()).toBeUndefined();
 });

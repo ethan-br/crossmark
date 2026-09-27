@@ -10,7 +10,7 @@ Supported Chromium storage restrictions limit extension storage to trusted conte
 
 Signing in with the same email and password recovers access to its existing collection. A newly installed browser replaces user bookmarks under supported portable roots with the cloud collection without merge approval. Local bookmarks are not uploaded. Managed roots remain untouched, and the original local snapshot stays in `joinRecovery` after sign-out and later large local changes. Self-service password reset is not implemented; the deployment operator can set a new password with an internal Convex function, which also ends every session (see [login setup](auth-setup.md#setting-or-resetting-a-password)). Sign-in and sign-up are rate limited on the backend.
 
-Accounts created with the earlier Google login have no password until the operator sets one; the popup says so when sign-in fails. Sign-out removes any leftover `storage.local.googleSession` record.
+Accounts created with the earlier Google login have no password until the operator sets one. Sign-out removes any leftover `storage.local.googleSession` record.
 
 Legacy v0 credentials and enrollment records were retired in the local backend. Ownerless development collections remain archived and cannot be accessed through any account. The extension strips a legacy credential and keeps its old sync data in `crossmarkLegacy` for local recovery; native bookmarks become the source when a new account-owned collection is initialized. A pre-migration database export is saved locally under `.convex/` and is not distributed.
 

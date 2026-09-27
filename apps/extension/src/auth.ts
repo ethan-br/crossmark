@@ -22,13 +22,12 @@ interface StoredSession {
   account?: Account;
 }
 const signInRequired = 'Sign in to continue.';
-const passwordHelp =
-  'Accounts created with Google sign-in need a password set by the backend operator; see docs/auth-setup.md.';
 const outdatedBackend = (site: string) =>
   `The backend at ${site} does not support email/password login. Deploy the current Convex functions to it.`;
 const messages: Record<string, string | ((site: string) => string)> = {
-  INVALID_EMAIL_OR_PASSWORD: `Invalid email or password. ${passwordHelp}`,
-  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: `An account with this email already exists. Sign in instead. ${passwordHelp}`,
+  INVALID_EMAIL_OR_PASSWORD: 'Invalid email or password.',
+  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+    'An account with this email already exists. Sign in instead.',
   EMAIL_PASSWORD_DISABLED: outdatedBackend,
   EMAIL_PASSWORD_SIGN_UP_DISABLED: outdatedBackend,
   404: outdatedBackend,
