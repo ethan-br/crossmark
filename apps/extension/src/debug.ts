@@ -6,6 +6,7 @@ const operations = [
   'bookmarks.read',
   'bookmarks.write',
   'bookmarks.recover',
+  'command.signIn',
   'command.connect',
   'command.disconnect',
   'command.revoke',

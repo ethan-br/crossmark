@@ -80,7 +80,7 @@ Deploy the Convex functions from the same commit as the extension build. A curre
 - **Too many attempts:** wait for the rate-limit window to pass — 5 minutes for sign-in, an hour for creating an account. The limiter counts an attempt before the origin check rejects the request, so a stale Firefox profile origin can exhaust the sign-up limit without the origin error ever appearing; fix the origin first.
 - **Sign-in required:** sign in with the same account again. Pending changes remain local. Export is available without a valid session; pausing also works without network access.
 
-For diagnostics, enable [debug mode](debugging.md) before reproducing. `auth.signIn` and `command.connect` record operation outcomes without credentials or tokens.
+For diagnostics, enable [debug mode](debugging.md) before reproducing. `auth.signIn`, `command.signIn` and `command.connect` record operation outcomes without credentials or tokens.
 
 Implementation references: [Better Auth email/password](https://www.better-auth.com/docs/authentication/email-password), [Convex Better Auth integration](https://labs.convex.dev/better-auth/framework-guides/react), [Better Auth bearer sessions](https://www.better-auth.com/docs/plugins/bearer).
 

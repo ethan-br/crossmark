@@ -9,7 +9,9 @@ import type { Credentials, SessionAuth } from './auth';
 import { type State, type Store, initialState, publicState } from './state';
 export type Command =
   | { type: 'state' }
-  | { type: 'connect'; name: string; credentials: Credentials }
+  | { type: 'signIn'; credentials: Credentials }
+  // Without credentials, connect registers with the session from a prior signIn.
+  | { type: 'connect'; name: string; credentials?: Credentials }
   | { type: 'sync' }
   | { type: 'pause' }
   | { type: 'pauseDevice'; deviceId: string; paused: boolean }
@@ -75,10 +77,14 @@ export class Engine {
           joinRecovery: state.joinRecovery ?? [],
           pending: state.outbox,
         };
-      if (command.type === 'connect') {
+      if (command.type === 'signIn' || (command.type === 'connect' && command.credentials)) {
         if (!this.auth) throw new Error('Sign in to continue.');
-        const account = await this.auth.signIn(command.credentials);
-        if (state.account && state.account.id !== account.id) {
+        const account = await this.auth.signIn(command.credentials!);
+        if (
+          state.account &&
+          state.account.id !== account.id &&
+          (state.connected || state.registrationPending)
+        ) {
           await this.auth.signOut();
           state.needsSignIn = true;
           await this.save(state);
@@ -86,7 +92,6 @@ export class Engine {
             `Sign in as ${state.account.email}, or sign out of this installation before using a different account.`,
           );
         }
-        const previouslyInstalled = state.initialized && state.installedAccountId === account.id;
         if (state.installedAccountId && state.installedAccountId !== account.id) {
           // Native IDs from another account must not be adopted into this one.
           state.mappings = {};
@@ -103,6 +108,21 @@ export class Engine {
           await this.exchange();
           return publicState(await this.store.read());
         }
+        if (command.type === 'signIn') {
+          state.collectionExists = await this.client.query(api.sync.joinsExisting, {
+            installationId: state.installationId,
+          });
+          if (!state.registrationPending) state.baseline = await this.adapter.read(state);
+          await this.save(state);
+          return publicState(state);
+        }
+      }
+      if (command.type === 'connect') {
+        if (!state.account) throw new Error('Sign in to continue.');
+        if (state.connected) return publicState(state);
+        await this.authorize();
+        const account = state.account;
+        const previouslyInstalled = state.initialized && state.installedAccountId === account.id;
         state.name = command.name.trim();
         if (!state.name || state.name.length > 80)
           throw new Error('Enter a browser name (up to 80 characters).');
@@ -121,6 +141,7 @@ export class Engine {
         state.deviceId = result.deviceId;
         state.connected = true;
         state.registrationPending = false;
+        delete state.collectionExists;
         state.status = 'syncing';
         state.joining = result.joining;
         if (state.joining && !previouslyInstalled) state.joinRecovery ??= local;
@@ -136,6 +157,15 @@ export class Engine {
         await this.save(state);
         await this.exchange();
         return publicState(await this.store.read());
+      }
+      if (command.type === 'disconnect' && !state.connected) {
+        // Signed in but not registered: keep the installation so a pending registration can resume.
+        await this.auth?.signOut();
+        delete state.account;
+        delete state.collectionExists;
+        state.needsSignIn = false;
+        await this.save(state);
+        return publicState(state);
       }
       if (!state.deviceId || !state.connected) throw new Error('Sign in to connect this browser.');
       const remotePause = command.type === 'pauseDevice' && command.deviceId !== state.deviceId;

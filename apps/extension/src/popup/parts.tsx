@@ -39,6 +39,36 @@ export function StatusText({ label, tone, pulse }: { label: string; tone: Tone; 
   );
 }
 
+export function Stats({
+  bookmarks,
+  folders,
+  children,
+}: {
+  bookmarks: number;
+  folders: number;
+  children?: ReactNode;
+}) {
+  return (
+    <section className="chamfer border-l-2 border-primary bg-card px-4 py-3.5">
+      <dl className="flex items-baseline gap-6">
+        {[
+          [bookmarks, bookmarks === 1 ? 'bookmark' : 'bookmarks'],
+          [folders, folders === 1 ? 'folder' : 'folders'],
+        ].map(([value, label]) => (
+          <div key={label} className="flex items-baseline gap-1.5">
+            <dt className="sr-only">{label}</dt>
+            <dd className="text-2xl font-semibold tracking-tight tabular-nums">{value}</dd>
+            <span aria-hidden className="text-xs text-muted-foreground">
+              {label}
+            </span>
+          </div>
+        ))}
+      </dl>
+      {children && <p className="mt-1.5 text-xs text-muted-foreground">{children}</p>}
+    </section>
+  );
+}
+
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <h3 className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
