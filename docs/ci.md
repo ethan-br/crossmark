@@ -22,7 +22,7 @@ Set these repository variables to the production functions and HTTP origins:
 
 Set `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` as repository secrets. The sign workflow requires all four values and fails before building if any are missing. AMO credentials are only used by the release workflow.
 
-Create a `production` GitHub environment with a `CONVEX_DEPLOY_KEY` environment secret for the production Convex deployment. Use a production deployment key, whose value starts with `prod:`. Configure `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` on that deployment, and ensure the repository's two `VITE_CONVEX_*` URLs point to it. The deploy workflow requires the key and runs only when manually dispatched; it does not create a Convex deployment or configure its environment variables.
+Create a `production` GitHub environment with a `CONVEX_DEPLOY_KEY` environment secret for the production Convex deployment. Use a production deployment key, whose value starts with `prod:`. Configure `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` on that deployment, and set the repository's `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` to its matching `convex.cloud` and `convex.site` origins. The deploy workflow checks that the key and both origins name the same deployment. It runs only when manually dispatched; it does not create a Convex deployment or configure its environment variables.
 
 ## Make a signed release
 
@@ -32,7 +32,7 @@ Create a `production` GitHub environment with a `CONVEX_DEPLOY_KEY` environment 
 
 The successful sign workflow attaches `crossmark-firefox-signed.xpi` and `crossmark-chromium.zip` to the release. Use the signed XPI for permanent Firefox installation; the unsigned XPI from Package is for temporary installation and build validation. A GitHub prerelease can use a numeric tag, but tags with a suffix such as `-beta.1` are not accepted as extension versions.
 
-The release tag controls the packaged version even if the checked-in `package.json` has a different version. Use a new version for each AMO submission; rerunning a successful release with the same version may be rejected by AMO. Pushes to `main` and tag pushes alone never submit to AMO. Assets appear only after the sign workflow finishes. If it fails after signing, download the `extension-signed` workflow artifact and add any missing asset to the release. Existing release assets are never overwritten by the workflow.
+The release tag controls the packaged version even if the checked-in `package.json` has a different version. Use a new version for each AMO submission; rerunning a successful release with the same version may be rejected by AMO. Pushes to `main` and tag pushes alone never submit to AMO. Assets appear only after the sign workflow finishes. If it fails after signing, download the `extension-signed` workflow artifact and add any missing asset to the release. Existing release assets are never overwritten by the workflow. If signing fails after the backend deploy, rerun **Deploy Convex production** with the previous release tag to restore its functions, after checking that its schema remains compatible with production data.
 
 Store listing (`wxt submit`) is a separate step and needs store credentials plus a sources zip. This project's local package command sets `zipSources: false` because the unsigned archive is for testing rather than source review.
 

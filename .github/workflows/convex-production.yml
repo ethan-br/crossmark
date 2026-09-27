@@ -49,6 +49,8 @@ jobs:
       - name: Deploy production functions
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+          VITE_CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
         run: |
           if [ -z "$CONVEX_DEPLOY_KEY" ]; then
             echo 'Set CONVEX_DEPLOY_KEY in the production environment before deploying.'
@@ -56,6 +58,21 @@ jobs:
           fi
           if [[ ! "$CONVEX_DEPLOY_KEY" =~ ^prod:[^|]+\|.+$ ]]; then
             echo 'CONVEX_DEPLOY_KEY must be a production deployment key.'
+            exit 1
+          fi
+          if [[ ! "$VITE_CONVEX_URL" =~ ^https://([a-z0-9-]+)\.convex\.cloud$ ]]; then
+            echo 'Set VITE_CONVEX_URL to the production https://<deployment>.convex.cloud origin.'
+            exit 1
+          fi
+          configured_deployment="${BASH_REMATCH[1]}"
+          key_deployment="${CONVEX_DEPLOY_KEY#prod:}"
+          key_deployment="${key_deployment%%|*}"
+          if [ "$key_deployment" != "$configured_deployment" ]; then
+            echo "CONVEX_DEPLOY_KEY targets $key_deployment but VITE_CONVEX_URL points at $configured_deployment."
+            exit 1
+          fi
+          if [ "$VITE_CONVEX_SITE_URL" != "https://$configured_deployment.convex.site" ]; then
+            echo "VITE_CONVEX_SITE_URL must point at https://$configured_deployment.convex.site."
             exit 1
           fi
           npx convex deploy --yes --message "release $RELEASE_TAG @ $(git rev-parse --short HEAD)"
