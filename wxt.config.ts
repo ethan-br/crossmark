@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
 import { extensionManifest } from './apps/extension/manifest';
 
@@ -60,6 +61,7 @@ export default defineConfig({
       VITE_CONVEX_SITE_URL: process.env.VITE_CONVEX_SITE_URL,
     }),
   vite: ({ browser }) => ({
+    plugins: [tailwindcss()],
     build: { target: browser === 'firefox' ? 'firefox128' : 'chrome120' },
   }),
   webExt: {
