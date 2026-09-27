@@ -385,7 +385,7 @@ function App() {
                   {status === 'review' ? (
                     <div className="cm-permission">
                       <div className="cm-item-title">Approve changes</div>
-                      <p>{`${pending} changes will update your other browsers.`}</p>
+                      <p>{`${pending} changes will update your other browsers. A recovery snapshot is saved first.`}</p>
                       <div className="cm-actions">
                         <button
                           className="cm-primary"
@@ -394,6 +394,14 @@ function App() {
                         >
                           <Check />
                           Approve
+                        </button>
+                        <button
+                          className="cm-secondary-button"
+                          disabled={busy}
+                          onClick={() => act({ type: 'pause' })}
+                        >
+                          <Pause />
+                          Pause
                         </button>
                       </div>
                     </div>
@@ -465,7 +473,10 @@ function App() {
                           <Globe />
                         </span>
                         <div className="cm-event-text">
-                          <div className="cm-item-title">{d.name}</div>
+                          <div className="cm-item-title">
+                            {d.name}
+                            {self && <span className="cm-sr-only"> (current browser)</span>}
+                          </div>
                           <div className="cm-secondary">
                             {paused
                               ? 'Paused'
