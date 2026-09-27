@@ -69,17 +69,24 @@ export class RemoteWatch {
       (signal) => {
         if (this.epoch !== epoch) return;
         this.failures = 0;
-        this.latest = signal;
-        if (this.syncing) this.dirty = true;
-        else void this.check(signal, epoch);
+        this.queue(signal, epoch);
       },
       () => this.fail(epoch),
     );
   }
 
-  private async check(signal: Signal, epoch: number) {
+  private queue(signal: Signal, epoch: number) {
     if (this.epoch !== epoch) return;
-    let started = false;
+    this.latest = signal;
+    if (this.syncing) {
+      this.dirty = true;
+      return;
+    }
+    this.syncing = true;
+    void this.check(signal, epoch);
+  }
+
+  private async check(signal: Signal, epoch: number) {
     try {
       // An ordinary bookmark exchange may have pushed this revision itself.
       // Wait for its snapshot write before deciding whether another pull is needed.
@@ -88,21 +95,15 @@ export class RemoteWatch {
       const state = await this.store.read();
       if (this.epoch !== epoch || !state.connected || state.deviceId !== this.deviceId) return;
       if (!changed(signal, state)) return;
-      if (this.syncing) {
-        this.dirty = true;
-        return;
-      }
-      this.syncing = true;
-      started = true;
       await this.sync();
     } catch {
       this.fail(epoch);
     } finally {
-      if (started && this.epoch === epoch) {
+      if (this.epoch === epoch) {
         this.syncing = false;
         if (this.dirty && this.latest) {
           this.dirty = false;
-          void this.check(this.latest, epoch);
+          this.queue(this.latest, epoch);
         }
       }
     }

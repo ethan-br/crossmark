@@ -161,6 +161,32 @@ describe('live remote change signals', () => {
     await vi.waitFor(() => expect(sync).toHaveBeenCalledTimes(2));
   });
 
+  it('coalesces back-to-back signals before the first idle check resolves', async () => {
+    let releaseIdle!: () => void;
+    let releaseSync!: () => void;
+    const idle = new Promise<void>((resolve) => {
+      releaseIdle = resolve;
+    });
+    const pendingSync = new Promise<void>((resolve) => {
+      releaseSync = resolve;
+    });
+    const whenIdle = vi.fn(() => idle);
+    const { watch, sync, signal, push, state, setState } = setup({
+      whenIdle,
+      sync: () => pendingSync,
+    });
+    watch.update(state());
+    push(signal({ revision: 2 }));
+    push(signal({ revision: 3 }));
+    expect(whenIdle).toHaveBeenCalledTimes(1);
+    releaseIdle();
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+    setState({ ...state(), snapshot: { ...state().snapshot!, revision: 3 } });
+    releaseSync();
+    await vi.waitFor(() => expect(whenIdle).toHaveBeenCalledTimes(2));
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
   it('handles query errors and rebuilds the subscription after a delay', async () => {
     vi.useFakeTimers();
     try {
