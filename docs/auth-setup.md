@@ -62,6 +62,16 @@ unset PASSWORD
 
 Add `--prod` (or `--preview-name …`) to target another deployment. This works for both password-less and existing accounts, keeps the account's collection, and ends every existing session, so each browser asks for the new password on its next sync. The function is internal; it cannot be called from the extension or the public HTTP routes.
 
+## Clearing a deployment
+
+To delete all app records and every table in the installed Better Auth component, run this operator-only action against the selected deployment:
+
+```sh
+npx convex run maintenance:clearAll '{"confirm":"DELETE_ALL_DATA"}'
+```
+
+Add `--prod` or `--preview-name …` to select another deployment. This permanently removes collections, devices, operations, backups, accounts, sessions, signing keys and rate-limit data. All browsers must sign up again. The action deletes in batches and returns a count for each table; if it is interrupted, run the same command again to finish. Stop clients from writing to the deployment while clearing it.
+
 ## Rate limiting
 
 Better Auth's limiter is enabled explicitly (it otherwise depends on `NODE_ENV`, which Convex does not set) and stores counters in the component's `rateLimit` table. Per client IP, `/sign-in/email` allows 10 attempts per 5 minutes and `/sign-up/email` 5 per hour; other auth routes use Better Auth's defaults. If Better Auth cannot resolve a client IP it logs a warning and falls back to one bucket per route for everyone; check the deployment logs for that warning after deploying.
