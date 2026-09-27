@@ -100,7 +100,9 @@ An opt-in background-console mode provides structured diagnostics, JSON export a
 
 | Path                                   | Responsibility                                                    |
 | -------------------------------------- | ----------------------------------------------------------------- |
-| `apps/extension/src/main.tsx`          | Extension popup                                                   |
+| `apps/extension/src/main.tsx`          | Extension popup shell: state, tabs and confirmations              |
+| `apps/extension/src/popup`             | Popup views (overview, activity, browsers, settings, sign-in)     |
+| `apps/extension/components/ui`         | shadcn/ui components used by the popup                            |
 | `apps/extension/src/auth.ts`           | Email/password sign-in and private session storage                |
 | `apps/extension/entrypoints`           | WXT background and popup entrypoints                              |
 | `apps/extension/src/engine.ts`         | Registration, durable queue, reconciliation and recovery          |

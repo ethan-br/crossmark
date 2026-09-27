@@ -48,7 +48,7 @@ try {
   assert.ok(!('account' in exported) && !('token' in exported));
   await page.reload();
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
-  await page.locator('.cm-window').screenshot({ path: 'output/verification/chromium-login.png' });
+  await page.locator('#root').screenshot({ path: 'output/verification/chromium-login.png' });
   const auth = await worker.evaluate(() => ({
     origin: chrome.runtime.getURL('').replace(/\/$/, ''),
   }));
