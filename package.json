@@ -48,7 +48,7 @@
   "devDependencies": {
     "@playwright/test": "^1.55.0",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.6.2",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@types/webextension-polyfill": "^0.12.0",
