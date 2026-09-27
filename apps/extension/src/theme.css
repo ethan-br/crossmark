@@ -1,0 +1,66 @@
+@import 'tailwindcss' source('..');
+@import 'tw-animate-css';
+
+/* One warm-neutral ramp (hue 85), one bookmark yellow and one red. */
+:root {
+  color-scheme: dark;
+  --radius: 0.125rem;
+  --chamfer: 10px;
+  --background: oklch(0.175 0.004 85);
+  --foreground: oklch(0.95 0.008 90);
+  --card: oklch(0.21 0.005 85);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.21 0.005 85);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.85 0.165 88);
+  --primary-foreground: oklch(0.2 0.03 85);
+  --secondary: oklch(0.25 0.006 85);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.25 0.006 85);
+  --muted-foreground: oklch(0.68 0.012 85);
+  --accent: oklch(0.275 0.008 85);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.68 0.19 28);
+  --border: oklch(0.31 0.007 85);
+  --input: oklch(0.31 0.007 85);
+  --ring: var(--primary);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.5);
+  --radius-xl: calc(var(--radius) * 2);
+}
+
+/* Clip-path also clips focus rings, so keep chamfers on non-interactive surfaces. */
+@utility chamfer {
+  clip-path: polygon(0 0, calc(100% - var(--chamfer)) 0, 100% var(--chamfer), 100% 100%, 0 100%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
