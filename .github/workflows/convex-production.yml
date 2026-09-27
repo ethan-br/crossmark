@@ -1,0 +1,61 @@
+name: Deploy Convex production
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to deploy, such as v0.0.4
+        required: true
+        type: string
+
+concurrency:
+  group: convex-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy tagged backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Validate release tag
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'Enter an existing numeric release tag, such as v0.0.4.'
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+      - name: Require a tag from main
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo 'The release tag must point to a commit on main.'
+            exit 1
+          fi
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Deploy production functions
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          if [ -z "$CONVEX_DEPLOY_KEY" ]; then
+            echo 'Set CONVEX_DEPLOY_KEY in the production environment before deploying.'
+            exit 1
+          fi
+          if [[ ! "$CONVEX_DEPLOY_KEY" =~ ^prod:[^|]+\|.+$ ]]; then
+            echo 'CONVEX_DEPLOY_KEY must be a production deployment key.'
+            exit 1
+          fi
+          npx convex deploy --yes --message "release $RELEASE_TAG @ $(git rev-parse --short HEAD)"

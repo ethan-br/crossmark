@@ -24,8 +24,6 @@ Set these in the selected deployment's **Convex dashboard → Settings → Envir
 
 Do not rotate `BETTER_AUTH_SECRET` during ordinary rebuilds: rotation invalidates sessions. New/cloud deployments need their own secret. Keep secrets out of source files and all `VITE_` or `WXT_` variables; only backend URLs are bundled in the extension.
 
-Pull-request preview deployments copy Convex **preview default** env vars. Set `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` with `npx convex env default set --type preview …` as described in [CI and deployments](ci.md).
-
 ## 3. Configure trusted origins
 
 Better Auth rejects sign-in requests whose `Origin` is not trusted. With the checked-in Chromium public manifest key, the unpacked extension ID is `eblopgfhjccjncfjmgcjfahaggkcolok`, so start with:

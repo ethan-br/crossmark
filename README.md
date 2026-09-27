@@ -90,7 +90,7 @@ Headless tests load the actual extension builds in disposable profiles. They ver
 
 `npm test` also checks the sync engine, adapters, the real Better Auth sign-up/sign-in routes, build endpoint validation, background messaging boundaries and account authorization in isolation through Vitest + WXT's fake-browser setup. These fixtures are test-only and are not included in either extension. On macOS Firefox smoke tests default to `/Applications/Firefox.app/Contents/MacOS/firefox`; override with `FIREFOX_BINARY` if needed. Selenium obtains geckodriver on its first run. Results and screenshots are in `output/verification/`. `npm run test:debug` checks the built Chromium debug controls without a backend (see [validation](docs/test-plan.md)).
 
-GitHub Actions runs typecheck, unit tests, browser smokes and unsigned packaging on every pull request and push to `main`. Publishing a GitHub release builds packages at the tag's version and signs Firefox through AMO. See [CI and releases](docs/ci.md).
+GitHub Actions runs typecheck, unit tests, browser smokes and unsigned packaging on every pull request and push to `main`. Deploy the production Convex functions manually from a release tag before publishing its GitHub release; publishing then builds packages at the tag's version and signs Firefox through AMO. See [CI and releases](docs/ci.md).
 
 ## Debugging
 
@@ -110,5 +110,5 @@ An opt-in background-console mode provides structured diagnostics, JSON export a
 | `apps/extension/manifest.ts`           | Shared permissions, backend origins and browser-specific settings |
 | `apps/extension/public/icons`          | Extension icons copied by WXT                                     |
 | `wxt.config.ts`                        | WXT builds, development browsers, packaging                       |
-| `.github/workflows`                    | Test, package, release-signing and Pullfrog jobs                  |
+| `.github/workflows`                    | Test, package, production deploy, release signing and Pullfrog    |
 | `docs`                                 | Setup, architecture, privacy, CI and validation                   |
