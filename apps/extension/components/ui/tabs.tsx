@@ -17,7 +17,10 @@ function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimi
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      className={cn('inline-flex h-10 items-stretch gap-5 text-muted-foreground', className)}
+      className={cn(
+        'inline-flex h-10 pointer-coarse:h-11 items-stretch gap-5 text-muted-foreground',
+        className,
+      )}
       {...props}
     />
   );
