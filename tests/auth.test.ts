@@ -61,6 +61,14 @@ it('exchanges email and password for a private session and a Convex JWT', async 
   await expect(auth.token()).rejects.toThrow('Sign in to continue');
 });
 
+it('shares a token refresh between the exchange and live subscription', async () => {
+  await session().signIn(credentials);
+  fetchMock.mockClear();
+  const auth = session();
+  expect(await Promise.all([auth.token(), auth.token()])).toEqual(['convex-jwt', 'convex-jwt']);
+  expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/convex/token'))).toHaveLength(1);
+});
+
 it('creates an account when requested', async () => {
   await session().signIn({ ...credentials, create: true });
   expect(body('/sign-up/email')).toEqual({

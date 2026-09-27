@@ -36,6 +36,7 @@ const messages: Record<string, string | ((site: string) => string)> = {
 };
 export class PasswordSession implements SessionAuth {
   private jwt?: { value: string; expiresAt: number };
+  private tokenRequest?: Promise<string>;
   constructor(
     private convexURL: string,
     private siteURL: string,
@@ -95,7 +96,13 @@ export class PasswordSession implements SessionAuth {
     return account;
   }
   token() {
-    return debug.trace('auth.token', () => this.tokenImpl());
+    if (this.jwt && this.jwt.expiresAt > Date.now() + 60000)
+      return Promise.resolve(this.jwt.value);
+    if (!this.tokenRequest)
+      this.tokenRequest = debug.trace('auth.token', () => this.tokenImpl()).finally(() => {
+        this.tokenRequest = undefined;
+      });
+    return this.tokenRequest;
   }
   private async tokenImpl() {
     if (this.jwt && this.jwt.expiresAt > Date.now() + 60000) return this.jwt.value;

@@ -22,7 +22,7 @@ describe('extension backend configuration', () => {
       ]);
       expect(manifest.content_security_policy).toEqual({
         extension_pages:
-          "script-src 'self'; object-src 'self'; connect-src 'self' https://example.convex.cloud https://example.convex.site",
+          "script-src 'self'; object-src 'self'; connect-src 'self' https://example.convex.cloud wss://example.convex.cloud https://example.convex.site",
       });
     },
   );

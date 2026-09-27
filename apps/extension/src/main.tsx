@@ -602,9 +602,9 @@ function App() {
                     <ChevronRight />
                   </button>
                   <p className="cm-fineprint">
-                    v{packageJson.version} · Native changes trigger sync. Remote changes are checked
-                    every 30 seconds while the browser is running. Bookmark data is not end-to-end
-                    encrypted.
+                    v{packageJson.version} · Native and remote changes trigger sync while the
+                    browser is running. A 30-second check catches missed updates. Bookmark data is
+                    not end-to-end encrypted.
                   </p>
                 </section>
               )}
