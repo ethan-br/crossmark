@@ -24,15 +24,15 @@ try {
     }),
   );
   await page.goto(`chrome-extension://${id}/${popup}`);
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
-  assert.match(await page.locator('.cm-source-note').innerText(), /signing in replaces these/);
+  await expect(page.getByRole('button', { name: 'Create account', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   const command = (message) =>
     page.evaluate((message) => chrome.runtime.sendMessage(message), message);
   const { data: state } = await command({ type: 'state' });
   assert.equal(state.connected, false);
   assert.ok(state.baseline.some((n) => n.title === 'Native bookmark'));
   assert.ok(!('token' in state));
-  assert.equal(await page.locator('input').count(), 3);
+  assert.equal(await page.locator('input').count(), 2);
   await page.getByLabel('Email').fill('smoke@example.com');
   await page.getByLabel('Password').fill('not-a-real-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -47,8 +47,8 @@ try {
   assert.ok(exported.nodes.some((n) => n.title === 'Native bookmark'));
   assert.ok(!('account' in exported) && !('token' in exported));
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
-  await page.locator('.cm-window').screenshot({ path: 'output/verification/chromium-login.png' });
+  await expect(page.getByRole('button', { name: 'Create account', exact: true })).toBeVisible();
+  await page.locator('#root').screenshot({ path: 'output/verification/chromium-login.png' });
   const auth = await worker.evaluate(() => ({
     origin: chrome.runtime.getURL('').replace(/\/$/, ''),
   }));
@@ -61,7 +61,7 @@ try {
         checks: [
           'Built extension startup',
           'Native bookmark read',
-          'Email/password sign-in UI',
+          'Welcome and email/password sign-in UI',
           'Failed sign-in reported',
           'No bookmark changes without login',
           'Credential-free export',

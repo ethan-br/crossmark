@@ -66,8 +66,9 @@ export default defineBackground(() => {
               : '';
     await browser.action.setBadgeText({ text });
     await browser.action.setBadgeBackgroundColor({
-      color: s.status === 'error' ? '#b74a3b' : '#247653',
+      color: s.status === 'error' ? '#f75e51' : '#fbc629',
     });
+    await browser.action.setBadgeTextColor({ color: '#1c1505' });
     await browser.action.setTitle({
       title: `Crossmark · ${s.paused ? 'Paused' : s.status === 'ready' ? 'Saved to Crossmark' : s.status} · ${s.outbox.length} pending`,
     });
@@ -115,6 +116,7 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(() => void engine.startup());
   const commands = new Set([
     'state',
+    'signIn',
     'connect',
     'sync',
     'pause',
@@ -135,14 +137,16 @@ export default defineBackground(() => {
     )
       return false;
     const m = message as Record<string, unknown>;
-    if (m.type === 'connect') {
+    if (m.type === 'connect' || m.type === 'signIn') {
       const c = m.credentials as Record<string, unknown> | undefined;
       if (
-        typeof m.name !== 'string' ||
-        !c ||
-        typeof c.email !== 'string' ||
-        typeof c.password !== 'string' ||
-        (c.create !== undefined && typeof c.create !== 'boolean')
+        (m.type === 'connect' && typeof m.name !== 'string') ||
+        (m.type === 'signIn' && !c) ||
+        (c !== undefined &&
+          (!c ||
+            typeof c.email !== 'string' ||
+            typeof c.password !== 'string' ||
+            (c.create !== undefined && typeof c.create !== 'boolean')))
       )
         return Promise.resolve({ error: 'Invalid connection request.' });
     }

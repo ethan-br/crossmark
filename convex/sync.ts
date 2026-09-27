@@ -19,27 +19,45 @@ function label(value: string) {
   if (!value.trim() || value.length > 80) fail('Use a browser name between 1 and 80 characters.');
   return value.trim();
 }
+function installation(ctx: QueryCtx, ownerId: string, installationId: string) {
+  return ctx.db
+    .query('devices')
+    .withIndex('by_installation', (q) =>
+      q.eq('ownerId', ownerId).eq('installationId', installationId),
+    )
+    .unique();
+}
+function ownedCollection(ctx: QueryCtx, ownerId: string) {
+  return ctx.db
+    .query('collections')
+    .withIndex('by_owner', (q) => q.eq('ownerId', ownerId))
+    .unique();
+}
+// Answers what connect would report as `joining`, so the popup can confirm first.
+export const joinsExisting = query({
+  args: { installationId: v.string() },
+  handler: async (ctx, { installationId }) => {
+    const user = await authComponent.getAuthUser(ctx);
+    if (!/^[a-f0-9-]{36}$/.test(installationId)) fail('Invalid installation ID.');
+    const existing = await installation(ctx, user._id, installationId);
+    if (existing?.revoked) fail('This installation was revoked. Sign out before signing in again.');
+    if (existing) return (await ctx.db.get(existing.collectionId))?.sourceDevice !== installationId;
+    return !!(await ownedCollection(ctx, user._id));
+  },
+});
 export const connect = mutation({
   args: { installationId: v.string(), name: v.string(), browser: v.string(), nodes: v.array(node) },
   handler: async (ctx, args) => {
     const user = await authComponent.getAuthUser(ctx);
     if (!/^[a-f0-9-]{36}$/.test(args.installationId)) fail('Invalid installation ID.');
-    const existing = await ctx.db
-      .query('devices')
-      .withIndex('by_installation', (q) =>
-        q.eq('ownerId', user._id).eq('installationId', args.installationId),
-      )
-      .unique();
+    const existing = await installation(ctx, user._id, args.installationId);
     if (existing) {
       if (existing.revoked)
         fail('This installation was revoked. Sign out before signing in again.');
       const collection = await ctx.db.get(existing.collectionId);
       return { deviceId: existing._id, joining: collection?.sourceDevice !== args.installationId };
     }
-    let collection = await ctx.db
-      .query('collections')
-      .withIndex('by_owner', (q) => q.eq('ownerId', user._id))
-      .unique();
+    let collection = await ownedCollection(ctx, user._id);
     const joining = !!collection;
     if (!collection) {
       validateTree(args.nodes);

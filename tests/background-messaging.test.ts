@@ -80,15 +80,28 @@ describe('background ↔ popup messaging', () => {
     expect(commandMock).not.toHaveBeenCalled();
   });
 
-  it('validates connect credentials before calling the engine', async () => {
-    const [raw] = await (fakeBrowser.runtime.onMessage as MessageEvent).trigger(
-      { type: 'connect', name: 'Chrome', credentials: { email: 1 } },
-      { id: fakeBrowser.runtime.id, url: fakeBrowser.runtime.getURL('popup.html') },
-    );
+  it.each([
+    { type: 'connect', name: 'Chrome', credentials: { email: 1 } },
+    { type: 'connect', credentials: { email: 'a@example.com', password: 'secret' } },
+    { type: 'signIn' },
+    { type: 'signIn', credentials: { email: 'a@example.com', password: 'secret', create: 'yes' } },
+  ])('validates sign-in and connect requests before calling the engine: %j', async (message) => {
+    const [raw] = await (fakeBrowser.runtime.onMessage as MessageEvent).trigger(message, {
+      id: fakeBrowser.runtime.id,
+      url: fakeBrowser.runtime.getURL('popup.html'),
+    });
     await expect(Promise.resolve(raw)).resolves.toEqual({
       error: 'Invalid connection request.',
     });
     expect(commandMock).not.toHaveBeenCalled();
+  });
+
+  it('passes sign-in and a credential-free connect through to the engine', async () => {
+    const credentials = { email: 'a@example.com', password: 'secret' };
+    await deliverPopupCommand({ type: 'signIn', credentials });
+    await deliverPopupCommand({ type: 'connect', name: 'Chrome' });
+    expect(commandMock).toHaveBeenCalledWith({ type: 'signIn', credentials });
+    expect(commandMock).toHaveBeenCalledWith({ type: 'connect', name: 'Chrome' });
   });
 
   it('surfaces engine failures as popup-facing errors', async () => {

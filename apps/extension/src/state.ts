@@ -16,6 +16,8 @@ export interface State {
   name: string;
   browser: string;
   connected: boolean;
+  /** Set by sign-in before registration: whether connecting replaces this browser's bookmarks. */
+  collectionExists?: boolean;
   paused: boolean;
   /** A local pause change the server has not acknowledged yet. */
   pausePending?: boolean;
@@ -47,10 +49,19 @@ export interface State {
   rootSignature?: string; // Read once to migrate the previous root-ID signature.
   rootSyncing?: Record<string, boolean>;
 }
+function browserName() {
+  if (typeof navigator === 'undefined') return 'Browser';
+  if (/Firefox/.test(navigator.userAgent)) return 'Firefox';
+  const brands =
+    (navigator as Navigator & { userAgentData?: { brands: { brand: string }[] } }).userAgentData
+      ?.brands ?? [];
+  const brand = brands.map((b) => b.brand).find((b) => !/Not.?A.?Brand|Chromium/i.test(b));
+  return brand?.replace(/^(Google|Microsoft) /, '') ?? 'Chromium';
+}
 export const initialState = (): State => ({
   version: 2,
   installationId: crypto.randomUUID(),
-  name: 'This browser',
+  name: browserName(),
   browser:
     typeof navigator !== 'undefined' && /Firefox/.test(navigator.userAgent)
       ? 'Firefox'
