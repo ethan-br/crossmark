@@ -82,6 +82,16 @@ it('reports rejected credentials without storing a session', async () => {
   expect(await storedSession()).toBeUndefined();
 });
 
+it('reports a duplicate account without storing a session', async () => {
+  fetchMock.mockResolvedValue(
+    Response.json({ code: 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL' }, { status: 422 }),
+  );
+  await expect(session().signIn({ ...credentials, create: true })).rejects.toThrow(
+    /^An account with this email already exists\. Sign in instead\.$/,
+  );
+  expect(await storedSession()).toBeUndefined();
+});
+
 it.each([
   ['EMAIL_PASSWORD_DISABLED', 400],
   ['EMAIL_PASSWORD_SIGN_UP_DISABLED', 400],
