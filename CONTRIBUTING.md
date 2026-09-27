@@ -254,11 +254,10 @@ Use the smallest proof that demonstrates the change works. At minimum:
 Do not replace meaningful behavior tests with assertions that merely mirror the
 implementation. Record the exact targeted commands and their results in the PR
 body. Let CI own broad repository-wide checks unless a maintainer asks for a
-local full-suite run. GitHub Actions currently runs typecheck, unit tests
-and browser smoke on every pull request; Convex preview and unsigned
-PR packaging are separate jobs. Signed Firefox packages are produced from
-`main` after a version bump, not from unsigned `main` artifacts. See
-[CI and deployments](docs/ci.md).
+local full-suite run. GitHub Actions runs typecheck, unit tests, browser smoke,
+and unsigned packaging on every pull request and push to `main`. Signed Firefox
+packages are produced only when a GitHub release is published. See
+[CI and releases](docs/ci.md).
 
 UI changes must include before/after screenshots that make the changed state
 clear. Animation, interaction, or timing changes must include a short video.

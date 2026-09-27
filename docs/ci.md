@@ -1,71 +1,40 @@
-# CI and deployments
+# CI and releases
 
-Crossmark has four GitHub Actions workflows. They are split so a failing AMO submission or a missing Convex key cannot block ordinary PR tests.
+Crossmark has four build and release workflows:
 
-## Recommended triggers
+| Workflow                     | Trigger                               | Output                                                                |
+| ---------------------------- | ------------------------------------- | --------------------------------------------------------------------- |
+| **Test**                     | Every pull request and push to `main` | Typecheck, unit tests, and browser smoke checks                       |
+| **Package**                  | Every pull request and push to `main` | Unsigned Chromium ZIP and Firefox XPI as workflow artifacts           |
+| **Deploy Convex production** | Manual run with a release tag         | Convex functions from that tag deployed to production                 |
+| **Sign release**             | Publishing a GitHub release           | Chromium ZIP and AMO-signed Firefox XPI attached after the job passes |
 
-| Workflow              | Trigger                                                                                                                                                                                    | Why                                                                                                                                                                                                                            |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Test**              | Every pull request and every push to `main`                                                                                                                                                | Isolated tests are cheap and should gate merge. Browser smoke is slower but is the only automated check of the real extension in a browser.                                                                                    |
-| **Convex preview**    | Pull requests against this repository                                                                                                                                                      | Each branch gets a disposable backend. Reuse the preview on later pushes (`--preview-name`) so test data survives; do not recreate it on every commit. Fork PRs are skipped because they must not receive deploy keys.         |
-| **Package**           | Unsigned zips on pull requests (and manual dispatch without **sign**). Signed artifacts on `main` when `package.json` version changes, on `v*` tags, and on manual dispatch with **sign**. | PR zips prove layout without talking to AMO. Pushes to `main` never upload an unsigned XPI. Signing submits to Mozilla, so the version must change between submissions and AMO credentials must not run on untrusted branches. |
-| **Convex production** | Push to `main`                                                                                                                                                                             | `main` is the production backend. Do not deploy production from pull requests.                                                                                                                                                 |
+The package workflow uses `npm run package`, which runs `wxt zip` for Chromium and `wxt zip -b firefox` for Firefox. It uses the version in the checked-in `package.json`. Production backend URLs come from the repository variables `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL`. If they are absent, unsigned packages use the loopback fallback and remain useful for build validation.
 
-Do not combine preview and production keys in one secret. GitHub Environments keep them apart: the production workflow uses the `production` environment.
+## GitHub setup
 
-## One-time GitHub setup
+Set these repository variables to the production functions and HTTP origins:
 
-### Secrets
+| Variable               | Example                             |
+| ---------------------- | ----------------------------------- |
+| `VITE_CONVEX_URL`      | `https://<deployment>.convex.cloud` |
+| `VITE_CONVEX_SITE_URL` | `https://<deployment>.convex.site`  |
 
-| Secret                      | Where                              | Value                                                                                                                |
-| --------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `CONVEX_PREVIEW_DEPLOY_KEY` | Repository secrets                 | Convex **preview** deploy key (`preview:team:project\|…`) from the project settings page. Grant `deployment:deploy`. |
-| `CONVEX_DEPLOY_KEY`         | **production** environment secrets | Convex **production** deploy key.                                                                                    |
-| `AMO_JWT_ISSUER`            | Repository secrets                 | AMO API key issuer, only needed to sign Firefox.                                                                     |
-| `AMO_JWT_SECRET`            | Repository secrets                 | AMO API key secret.                                                                                                  |
+Set `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` as repository secrets. The sign workflow requires all four values and fails before building if any are missing. AMO credentials are only used by the release workflow.
 
-### Variables
+Create a `production` GitHub environment with a `CONVEX_DEPLOY_KEY` environment secret for the production Convex deployment. Use a production deployment key, whose value starts with `prod:`. Configure `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` on that deployment, and set the repository's `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` to its matching `convex.cloud` and `convex.site` origins. The deploy workflow checks that the key and both origins name the same deployment. It runs only when manually dispatched; it does not create a Convex deployment or configure its environment variables.
 
-| Variable               | Where                | Value                                                            |
-| ---------------------- | -------------------- | ---------------------------------------------------------------- |
-| `VITE_CONVEX_URL`      | Repository variables | Production functions origin, `https://<deployment>.convex.cloud` |
-| `VITE_CONVEX_SITE_URL` | Repository variables | Production HTTP origin, `https://<deployment>.convex.site`       |
+## Make a signed release
 
-PR unsigned-package jobs still succeed if those variables are unset: the extension falls back to loopback URLs, which is enough to prove the zip layout. Signed builds on `main` and tags fail until the production URLs are set, so a signed XPI cannot ship pointed at `127.0.0.1`.
+1. Choose a commit on `main` with passing tests, and create and push a numeric tag such as `v0.0.4` (or `0.0.4`).
+2. In **Actions → Deploy Convex production → Run workflow**, enter that tag. Wait for the run to succeed. It checks out the tag and deploys its `convex/` functions to production. This keeps the backend and extension on the same commit.
+3. Create and publish a GitHub release for the same tag. The sign workflow runs tests, sets the build version from the tag, packages both browsers, verifies both manifest versions, and submits Firefox for unlisted AMO signing. Wait for the workflow to succeed before sharing the release assets.
 
-Create the `production` GitHub Environment (Settings → Environments) and add `CONVEX_DEPLOY_KEY` there. Until that secret exists, the production workflow is skipped instead of failing `main`. Optional later: required reviewers on that environment before production deploys.
+The successful sign workflow attaches `crossmark-firefox-signed.xpi` and `crossmark-chromium.zip` to the release. Use the signed XPI for permanent Firefox installation; the unsigned XPI from Package is for temporary installation and build validation. A GitHub prerelease can use a numeric tag, but tags with a suffix such as `-beta.1` are not accepted as extension versions.
 
-The preview job is likewise skipped until `CONVEX_PREVIEW_DEPLOY_KEY` is set, and it never runs on fork pull requests.
+The release tag controls the packaged version even if the checked-in `package.json` has a different version. Use a new version for each AMO submission; rerunning a successful release with the same version may be rejected by AMO. Pushes to `main` and tag pushes alone never submit to AMO. Assets appear only after the sign workflow finishes. If it fails after signing, download the `extension-signed` workflow artifact and add any missing asset to the release. Existing release assets are never overwritten by the workflow. If signing fails after the backend deploy, rerun **Deploy Convex production** with the previous release tag to restore its functions, after checking that its schema remains compatible with production data.
 
-## Convex preview defaults
-
-New preview deployments copy **project default** environment variables for the `preview` type. Set these once from a machine already logged into Convex:
-
-```sh
-npx convex env default set --type preview BETTER_AUTH_SECRET '…'
-npx convex env default set --type preview AUTH_TRUSTED_ORIGINS 'chrome-extension://eblopgfhjccjncfjmgcjfahaggkcolok'
-```
-
-Use a dedicated Better Auth secret for previews, not the production value. Append any Firefox `moz-extension://` origins you test previews with; see [login setup](auth-setup.md#3-configure-trusted-origins). Each preview has its own user table, so create a test account on it.
-
-Isolated tests and headless smoke checks do not need a backend. The Vitest job (`npm test`) uses WXT's fake-browser setup and never opens a browser profile or prompts for OAuth.
-
-Idle previews expire (5 days on Free/Starter, 14 days on paid plans) and count toward the team's deployment limit.
-
-## Firefox signing
-
-`npm run sign:firefox` submits an **unlisted** XPI through Mozilla's signing API. Use it for self-distributed testing, not store listing.
-
-Bump `package.json` `version` before each successful submission. Re-signing the same version is rejected or confusing on AMO. A push to `main` signs only when that version string changed; other `main` pushes produce no package artifacts. Tags and manual **sign** runs always submit.
-
-Trigger signing by bumping the version and merging to `main`, by pushing a matching tag:
-
-```sh
-git tag v0.0.4
-git push origin v0.0.4
-```
-
-or **Actions → Package → Run workflow** with **sign** enabled. Store listing (`wxt submit`) is a later step and needs Chrome/Firefox listing credentials plus a sources zip; this repo's local `package:firefox` path still sets `zipSources: false` because that archive is for temporary install, not source review.
+Store listing (`wxt submit`) is a separate step and needs store credentials plus a sources zip. This project's local package command sets `zipSources: false` because the unsigned archive is for testing rather than source review.
 
 ## Local commands that match CI
 
@@ -76,6 +45,6 @@ npm run build
 npm run package
 ```
 
-Browser smoke still expects the unconfigured local backend. See [the test plan](test-plan.md).
+Browser smoke checks expect the unconfigured local backend. See [the test plan](test-plan.md).
 
 Development browsers: `npm run dev` / `npm run dev:firefox` open Chrome and Firefox binaries discovered from `CHROME_BINARY` / `FIREFOX_BINARY` or standard install paths. Set `WXT_OPEN_BROWSER=0` to skip launching a window. Personal persistent profiles belong in the ignored `web-ext.config.ts`, not in `wxt.config.ts`.

@@ -11,5 +11,4 @@ web-ext-artifacts/
 test-results/
 playwright-report/
 output/
-convex-preview.env
 .DS_Store
