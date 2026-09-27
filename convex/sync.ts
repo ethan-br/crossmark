@@ -38,7 +38,9 @@ export const joinsExisting = query({
   args: { installationId: v.string() },
   handler: async (ctx, { installationId }) => {
     const user = await authComponent.getAuthUser(ctx);
+    if (!/^[a-f0-9-]{36}$/.test(installationId)) fail('Invalid installation ID.');
     const existing = await installation(ctx, user._id, installationId);
+    if (existing?.revoked) fail('This installation was revoked. Sign out before signing in again.');
     if (existing) return (await ctx.db.get(existing.collectionId))?.sourceDevice !== installationId;
     return !!(await ownedCollection(ctx, user._id));
   },

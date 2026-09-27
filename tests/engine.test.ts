@@ -1231,6 +1231,23 @@ describe('sign-in before connecting', () => {
     expect(state.installationId).toBe(before.installationId);
     expect(await t.run((ctx) => ctx.db.query('devices').collect())).toHaveLength(0);
   });
+  it('reauthenticates a connected browser without re-running the pre-connect checks', async () => {
+    const { t, a } = await connectPair();
+    const before = await a.store.read();
+    await a.native.create({
+      parentId: '1',
+      title: 'While signed out',
+      url: 'https://later.example',
+    });
+    const state = (await a.engine.command({ type: 'signIn', credentials })) as State;
+    expect(state.connected).toBe(true);
+    expect(state.deviceId).toBe(before.deviceId);
+    expect(state.account).toEqual(before.account);
+    expect(state.collectionExists).toBeUndefined();
+    expect(state.outbox).toHaveLength(0);
+    expect(state.snapshot?.nodes.some((n) => n.title === 'While signed out')).toBe(true);
+    expect(await t.run((ctx) => ctx.db.query('devices').collect())).toHaveLength(2);
+  });
   it('lets an unregistered installation sign in with a different account', async () => {
     const { device } = await setup();
     const a = device('First');
