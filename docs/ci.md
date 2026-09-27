@@ -2,12 +2,12 @@
 
 Crossmark has four build and release workflows:
 
-| Workflow                     | Trigger                               | Output                                                                |
-| ---------------------------- | ------------------------------------- | --------------------------------------------------------------------- |
-| **Test**                     | Every pull request and push to `main` | Typecheck, unit tests, and browser smoke checks                       |
-| **Package**                  | Every pull request and push to `main` | Unsigned Chromium ZIP and Firefox XPI as workflow artifacts           |
-| **Deploy Convex production** | Manual run with a release tag         | Convex functions from that tag deployed to production                 |
-| **Sign release**             | Publishing a GitHub release           | Chromium ZIP and AMO-signed Firefox XPI attached after the job passes |
+| Workflow                     | Trigger                                                           | Output                                                                |
+| ---------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Test**                     | Every pull request and push to `main`                             | Typecheck, unit tests, and browser smoke checks                       |
+| **Package**                  | Every pull request and push to `main`                             | Unsigned Chromium ZIP and Firefox XPI as workflow artifacts           |
+| **Deploy Convex production** | Manual run with a release tag                                     | Convex functions from that tag deployed to production                 |
+| **Sign release**             | Publishing a GitHub release or manually selecting a published tag | Chromium ZIP and AMO-signed Firefox XPI attached after the job passes |
 
 The package workflow uses `npm run package`, which runs `wxt zip` for Chromium and `wxt zip -b firefox` for Firefox. It uses the version in the checked-in `package.json`. Production backend URLs come from the repository variables `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL`. If they are absent, unsigned packages use the loopback fallback and remain useful for build validation.
 
@@ -29,6 +29,8 @@ Create a `production` GitHub environment with a `CONVEX_DEPLOY_KEY` environment 
 1. Choose a commit on `main` with passing tests, and create and push a numeric tag such as `v0.0.4` (or `0.0.4`).
 2. In **Actions → Deploy Convex production → Run workflow**, enter that tag. Wait for the run to succeed. It checks out the tag and deploys its `convex/` functions to production. This keeps the backend and extension on the same commit.
 3. Create and publish a GitHub release for the same tag. The sign workflow runs tests, sets the build version from the tag, packages both browsers, verifies both manifest versions, and submits Firefox for unlisted AMO signing. Wait for the workflow to succeed before sharing the release assets.
+
+If signing fails before AMO accepts the package, rerun **Sign release** from Actions using **Run workflow** and the same published tag. A workflow rerun uses the original workflow definition, so use a new manual run after a workflow fix has been merged.
 
 The successful sign workflow attaches `crossmark-firefox-signed.xpi` and `crossmark-chromium.zip` to the release. Use the signed XPI for permanent Firefox installation; the unsigned XPI from Package is for temporary installation and build validation. A GitHub prerelease can use a numeric tag, but tags with a suffix such as `-beta.1` are not accepted as extension versions.
 
