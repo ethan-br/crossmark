@@ -16,7 +16,6 @@ import {
   FolderInput,
   Trash2,
   Globe,
-  ArrowLeft,
   UserRound,
   Download,
   X,
@@ -330,7 +329,7 @@ function App() {
                 )}
                 <div className="cm-actions">
                   <button className="cm-primary" disabled={busy}>
-                    {busy ? <LoaderCircle className="spin" /> : <KeyRound />}
+                    {busy && <LoaderCircle className="spin" />}
                     {busy
                       ? 'Signing in…'
                       : create && !state.connected
@@ -371,7 +370,6 @@ function App() {
                       <span className="cm-check">
                         <StatusIcon className={status === 'syncing' ? 'spin' : ''} />
                       </span>
-                      <span className="cm-status-label">This browser</span>
                     </div>
                     <h2>{details.title}</h2>
                     <p className="cm-state-desc">{details.description}</p>
@@ -382,21 +380,13 @@ function App() {
                   </div>
                   <div className="cm-stats">
                     <strong>{stats.bookmarks}</strong> bookmarks<span className="cm-dot">·</span>
-                    <strong>{stats.folders}</strong> folders<span className="cm-dot">·</span>
-                    {state.name}
+                    <strong>{stats.folders}</strong> folders
                   </div>
                   {status === 'review' ? (
                     <div className="cm-permission">
                       <div className="cm-item-title">Approve changes</div>
-                      <p>
-                        {`${pending} pending operations will update your other browsers. Export includes the operations and the previous snapshot.`}
-                      </p>
-                      <p>A recovery snapshot is saved before applying changes.</p>
+                      <p>{`${pending} changes will update your other browsers.`}</p>
                       <div className="cm-actions">
-                        <button className="cm-secondary-button" onClick={exportData}>
-                          <Download />
-                          Export
-                        </button>
                         <button
                           className="cm-primary"
                           disabled={busy}
@@ -409,13 +399,7 @@ function App() {
                     </div>
                   ) : (
                     <>
-                      <div className="cm-section-title">
-                        Recent changes
-                        <button className="cm-link" onClick={() => setTab('activity')}>
-                          View all
-                          <ChevronRight />
-                        </button>
-                      </div>
+                      <div className="cm-section-title">Recent changes</div>
                       {activity.length ? (
                         activity.slice(0, 2).map((e) => eventRow(e))
                       ) : (
@@ -458,8 +442,6 @@ function App() {
               )}
               {tab === 'activity' && (
                 <section className="cm-content" aria-label="Bookmark activity">
-                  <h2 className="cm-panel-title">Activity</h2>
-                  <p className="cm-intro">Recent bookmark changes and syncs.</p>
                   {activity.length ? (
                     activity.map((e) => eventRow(e))
                   ) : (
@@ -469,21 +451,21 @@ function App() {
               )}
               {tab === 'browsers' && (
                 <section className="cm-content" aria-label="Connected browsers">
-                  <h2 className="cm-panel-title">Connected browsers</h2>
                   {browsers.map((d) => {
                     const self = d.id === state.deviceId;
                     const paused = self ? state.paused : d.paused;
                     const lastSync = self ? state.lastSync : d.lastSeen;
                     return (
-                      <div className="cm-browser-row" key={d.id}>
-                        <span className="cm-browser-symbol">
+                      <div
+                        className="cm-browser-row"
+                        key={d.id}
+                        aria-current={self ? 'true' : undefined}
+                      >
+                        <span className={`cm-browser-symbol ${self ? 'cm-self' : ''}`}>
                           <Globe />
                         </span>
                         <div className="cm-event-text">
-                          <div className="cm-item-title">
-                            {d.name}
-                            {self && <span className="cm-tag">This browser</span>}
-                          </div>
+                          <div className="cm-item-title">{d.name}</div>
                           <div className="cm-secondary">
                             {paused
                               ? 'Paused'
@@ -494,91 +476,54 @@ function App() {
                                   : 'Not synced yet'}
                           </div>
                         </div>
-                        <div className="cm-browser-actions">
-                          <button
-                            className="cm-link"
-                            aria-label={`${paused ? 'Resume' : 'Pause'} ${d.name}`}
-                            disabled={busy}
-                            onClick={() =>
-                              act({ type: 'pauseDevice', deviceId: d.id, paused: !paused })
-                            }
-                          >
-                            {paused ? <Play /> : <Pause />}
-                            {paused ? 'Resume' : 'Pause'}
-                          </button>
-                          <button
-                            className="cm-link cm-remove"
-                            aria-label={`Disconnect ${d.name}`}
-                            disabled={busy}
-                            onClick={() =>
-                              setConfirm(
-                                self
-                                  ? {
-                                      title: 'Disconnect this browser?',
-                                      body: 'This browser stops syncing, is removed from your connected browsers, and signs out. Its bookmarks stay here. Sign in again to reconnect.',
-                                      command: { type: 'disconnect' },
-                                      label: 'Disconnect',
-                                    }
-                                  : {
-                                      title: `Disconnect ${d.name}?`,
-                                      body: `${d.name} stops syncing and is removed from your connected browsers. Its bookmarks stay in that browser. To reconnect it, sign out and sign in again on that browser.`,
-                                      command: { type: 'revoke', deviceId: d.id },
-                                      label: 'Disconnect',
-                                    },
-                              )
-                            }
-                          >
-                            <X />
-                            Disconnect
-                          </button>
-                        </div>
+                        {!self && (
+                          <div className="cm-browser-actions">
+                            <button
+                              className="cm-link"
+                              aria-label={`${paused ? 'Resume' : 'Pause'} ${d.name}`}
+                              disabled={busy}
+                              onClick={() =>
+                                act({ type: 'pauseDevice', deviceId: d.id, paused: !paused })
+                              }
+                            >
+                              {paused ? <Play /> : <Pause />}
+                              {paused ? 'Resume' : 'Pause'}
+                            </button>
+                            <button
+                              className="cm-link cm-remove"
+                              aria-label={`Disconnect ${d.name}`}
+                              disabled={busy}
+                              onClick={() =>
+                                setConfirm({
+                                  title: `Disconnect ${d.name}?`,
+                                  body: `${d.name} stops syncing and is removed from your connected browsers. Its bookmarks stay in that browser. To reconnect it, sign out and sign in again on that browser.`,
+                                  command: { type: 'revoke', deviceId: d.id },
+                                  label: 'Disconnect',
+                                })
+                              }
+                            >
+                              <X />
+                              Disconnect
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
-                  <p className="cm-note">
-                    Other browsers pick up a pause or disconnect the next time they sync.
-                  </p>
-                  <div className="cm-permission">
-                    <div className="cm-item-title">Connect another browser</div>
-                    <p>Install Crossmark and sign in with {state.account?.email}.</p>
-                  </div>
                 </section>
               )}
               {tab === 'settings' && (
                 <section className="cm-content" aria-label="Extension settings">
-                  <button className="cm-back" onClick={() => setTab('overview')}>
-                    <ArrowLeft />
-                    Overview
-                  </button>
-                  <h2 className="cm-panel-title">Settings</h2>
                   <div className="cm-setting">
                     <div className="cm-setting-copy">
                       <div className="cm-item-title">Account</div>
                       <p className="cm-secondary">{state.account?.email}</p>
                     </div>
                   </div>
-                  <label className="cm-setting">
-                    <div className="cm-setting-copy">
-                      <div className="cm-item-title">Automatic sync</div>
-                      <p className="cm-secondary">
-                        Sync native bookmark changes from this browser.
-                      </p>
-                    </div>
-                    <input
-                      className="cm-switch"
-                      type="checkbox"
-                      role="switch"
-                      aria-label="Automatic sync"
-                      checked={!state.paused}
-                      disabled={busy}
-                      onChange={() => act({ type: 'pause' })}
-                    />
-                  </label>
                   <button className="cm-setting-button" onClick={exportData}>
                     <Download />
                     <span>
-                      <strong>Export bookmarks and recovery</strong>
-                      <small>Collection, recovery snapshot and pending changes as JSON.</small>
+                      <strong>Export bookmarks</strong>
                     </span>
                     <ChevronRight />
                   </button>
@@ -588,7 +533,7 @@ function App() {
                     onClick={() =>
                       setConfirm({
                         title: 'Sign out?',
-                        body: 'Sync pending changes before signing out. Native bookmarks remain in this browser. Sign in with the same account to reconnect.',
+                        body: 'This browser stops syncing and is removed from your connected browsers. Its bookmarks stay here. Sync pending changes first; sign in with the same account to reconnect.',
                         command: { type: 'disconnect' },
                         label: 'Sign out',
                       })
@@ -597,15 +542,10 @@ function App() {
                     <LogOut />
                     <span>
                       <strong>Sign out</strong>
-                      <small>Stop sync and end this installation’s session.</small>
                     </span>
                     <ChevronRight />
                   </button>
-                  <p className="cm-fineprint">
-                    v{packageJson.version} · Native changes trigger sync. Remote changes are checked
-                    every 30 seconds while the browser is running. Bookmark data is not end-to-end
-                    encrypted.
-                  </p>
+                  <p className="cm-fineprint">v{packageJson.version}</p>
                 </section>
               )}
             </>

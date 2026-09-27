@@ -352,6 +352,10 @@
   font-weight: 500;
   flex-shrink: 0;
 }
+#cm-extension-mock .cm-browser-symbol.cm-self {
+  background: var(--cm-wash);
+  color: var(--cm-accent);
+}
 #cm-extension-mock .cm-tag {
   font-size: 10px;
   padding: 2px 6px;
