@@ -1,15 +1,10 @@
 import type { ReactNode } from 'react';
-import { BookmarkCheck } from 'lucide-react';
 import type { Activity } from '../../../../packages/model';
 import { cn } from '@/lib/utils';
 import { activityLines, relative, type Tone } from './shared';
 
 export function BrandMark() {
-  return (
-    <span className="chamfer grid size-7 place-items-center bg-primary text-primary-foreground [--chamfer:7px]">
-      <BookmarkCheck className="size-4" strokeWidth={2.2} />
-    </span>
-  );
+  return <img src="/icons/logo.svg" alt="" aria-hidden="true" className="size-7 shrink-0" />;
 }
 
 const tones: Record<Tone, string> = {
