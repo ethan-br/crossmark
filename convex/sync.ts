@@ -137,10 +137,7 @@ export const snapshot = query({
 export const signal = query({
   args: { deviceId: v.id('devices') },
   handler: async (ctx, { deviceId }) => {
-    const user = await authComponent.getAuthUser(ctx);
-    const device = await ctx.db.get(deviceId);
-    if (!device || device.ownerId !== user._id)
-      return fail('This browser is disconnected. Sign in to reconnect.');
+    const device = await authenticate(ctx, deviceId);
     const collection = await ctx.db.get(device.collectionId);
     if (!collection) return fail('Collection unavailable.');
     const devices = await ctx.db
@@ -150,7 +147,6 @@ export const signal = query({
     return {
       revision: collection.revision,
       paused: device.paused ?? false,
-      revoked: device.revoked,
       devices: devices.map((d) => ({
         id: d._id,
         paused: d.paused ?? false,

@@ -44,7 +44,13 @@ export default defineBackground(() => {
     undefined,
     auth,
   );
-  remoteWatch = new RemoteWatch(convexURL, auth, store, () => engine.sync());
+  remoteWatch = new RemoteWatch(
+    convexURL,
+    auth,
+    store,
+    () => engine.sync(),
+    () => engine.whenIdle(),
+  );
   // Queue startup behind the persisted opt-in; listeners still register synchronously.
   void engine.run(() => diagnostics.ready);
   async function badge(s: State) {

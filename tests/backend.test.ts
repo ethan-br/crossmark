@@ -48,7 +48,7 @@ describe('Convex authorization and durable operations', () => {
     );
     await t.mutation(api.sync.revoke, { deviceId, targetDeviceId: deviceId });
     await expect(t.query(api.sync.snapshot, { deviceId })).rejects.toThrow('disconnected');
-    expect((await t.query(api.sync.signal, { deviceId })).revoked).toBe(true);
+    await expect(t.query(api.sync.signal, { deviceId })).rejects.toThrow('disconnected');
   });
   it('isolates accounts on reads, writes and revocation', async () => {
     const { t, account, deviceId } = await setup();

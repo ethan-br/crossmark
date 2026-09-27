@@ -96,12 +96,13 @@ export class PasswordSession implements SessionAuth {
     return account;
   }
   token() {
-    if (this.jwt && this.jwt.expiresAt > Date.now() + 60000)
-      return Promise.resolve(this.jwt.value);
+    if (this.jwt && this.jwt.expiresAt > Date.now() + 60000) return Promise.resolve(this.jwt.value);
     if (!this.tokenRequest)
-      this.tokenRequest = debug.trace('auth.token', () => this.tokenImpl()).finally(() => {
-        this.tokenRequest = undefined;
-      });
+      this.tokenRequest = debug
+        .trace('auth.token', () => this.tokenImpl())
+        .finally(() => {
+          this.tokenRequest = undefined;
+        });
     return this.tokenRequest;
   }
   private async tokenImpl() {

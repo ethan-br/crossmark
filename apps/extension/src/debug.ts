@@ -19,6 +19,7 @@ const operations = [
   'sync.capture',
   'sync.project',
   'sync.retry',
+  'sync.watch',
 ] as const;
 type Operation = (typeof operations)[number];
 const outcomes = [

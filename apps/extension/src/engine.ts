@@ -46,6 +46,9 @@ export class Engine {
     this.serial = next.catch(() => {});
     return next;
   }
+  whenIdle(): Promise<void> {
+    return this.serial.then(() => undefined);
+  }
   command(command: Command): Promise<unknown> {
     if (command.type === 'state') return this.commandImpl(command);
     return debug.trace(`command.${command.type}`, () => this.commandImpl(command));
@@ -264,8 +267,10 @@ export class Engine {
       try {
         await this.authorize();
         await this.reconcilePause(state);
-      } catch {
+      } catch (error) {
         debug.event('sync.pause', 'failure');
+        if (/Unauthenticated|Sign in to continue|This browser is disconnected/i.test(String(error)))
+          throw error;
       }
     return state.paused;
   }
@@ -400,7 +405,9 @@ export class Engine {
         /fetch|network|connection|offline|Could not reach/i.test(String(error))
           ? 'offline'
           : 'error';
-      state.needsSignIn = /Unauthenticated|Sign in to continue/i.test(String(error));
+      state.needsSignIn = /Unauthenticated|Sign in to continue|This browser is disconnected/i.test(
+        String(error),
+      );
       state.error =
         error instanceof Error
           ? error.message
