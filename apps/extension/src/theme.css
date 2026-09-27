@@ -65,8 +65,14 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  /* Popups size to content, so these minimums set the default; larger panels fill. */
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply min-h-[540px] min-w-[340px] overflow-hidden bg-background text-foreground antialiased;
   }
 }
 

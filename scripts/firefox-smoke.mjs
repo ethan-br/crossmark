@@ -76,7 +76,7 @@ try {
   await driver.wait(until.elementLocated(By.css('#browser-name')), 15000);
   await writeFile(
     'output/verification/firefox-login.png',
-    await driver.findElement(By.css('.cm-window')).takeScreenshot(),
+    await driver.findElement(By.css('#root')).takeScreenshot(),
     'base64',
   );
   const auth = await fx(() => ({

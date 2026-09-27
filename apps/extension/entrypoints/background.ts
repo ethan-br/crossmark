@@ -54,8 +54,9 @@ export default defineBackground(() => {
               : '';
     await browser.action.setBadgeText({ text });
     await browser.action.setBadgeBackgroundColor({
-      color: s.status === 'error' ? '#b74a3b' : '#247653',
+      color: s.status === 'error' ? '#f75e51' : '#fbc629',
     });
+    await browser.action.setBadgeTextColor({ color: '#1c1505' });
     await browser.action.setTitle({
       title: `Crossmark · ${s.paused ? 'Paused' : s.status === 'ready' ? 'Saved to Crossmark' : s.status} · ${s.outbox.length} pending`,
     });
