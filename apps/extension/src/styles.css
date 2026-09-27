@@ -136,13 +136,6 @@
   color: var(--cm-on);
   border-radius: 50%;
 }
-#cm-extension-mock .cm-status-label {
-  font-size: 11px;
-  letter-spacing: 0.4px;
-  font-weight: 500;
-  text-transform: uppercase;
-  color: var(--cm-accent);
-}
 #cm-extension-mock h2 {
   font-size: 23px;
   line-height: 1.2;
@@ -327,13 +320,6 @@
   color: var(--cm-muted);
   margin-bottom: 20px;
 }
-#cm-extension-mock .cm-day {
-  font-size: 11px;
-  color: var(--cm-muted);
-  margin: 19px 0 4px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
 #cm-extension-mock .cm-browser-row {
   padding: 15px 0;
   display: flex;
@@ -352,14 +338,17 @@
   font-weight: 500;
   flex-shrink: 0;
 }
-#cm-extension-mock .cm-tag {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
+#cm-extension-mock .cm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+#cm-extension-mock .cm-browser-symbol.cm-self {
   background: var(--cm-wash);
   color: var(--cm-accent);
-  margin-left: 5px;
-  white-space: nowrap;
 }
 #cm-extension-mock .cm-browser-actions {
   margin-left: auto;
@@ -372,29 +361,6 @@
 #cm-extension-mock .cm-browser-actions svg {
   width: 12px;
   height: 12px;
-}
-#cm-extension-mock .cm-note {
-  font-size: 12px;
-  color: var(--cm-muted);
-  padding-top: 16px;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-#cm-extension-mock .cm-note svg {
-  margin-top: 2px;
-}
-#cm-extension-mock .cm-back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  background: transparent;
-  color: var(--cm-muted);
-  font-size: 12px;
-  padding: 0;
-  margin-bottom: 15px;
-  min-height: 24px;
 }
 #cm-extension-mock .cm-setting {
   display: flex;
@@ -409,43 +375,6 @@
 #cm-extension-mock .cm-setting-copy .cm-secondary {
   margin-top: 3px;
 }
-#cm-extension-mock .cm-switch {
-  appearance: none;
-  width: 34px;
-  height: 20px;
-  border-radius: 20px;
-  background: light-dark(#cbd3cd, #57625b);
-  border: 0;
-  flex-shrink: 0;
-  position: relative;
-  cursor: pointer;
-  margin: 0;
-}
-#cm-extension-mock .cm-switch:after {
-  content: '';
-  position: absolute;
-  left: 3px;
-  top: 3px;
-  width: 14px;
-  height: 14px;
-  background: light-dark(#ffffff, #edf2ee);
-  border-radius: 50%;
-  transition: transform 0.15s;
-}
-#cm-extension-mock .cm-switch:checked {
-  background: var(--cm-accent);
-}
-#cm-extension-mock .cm-switch:checked:after {
-  transform: translateX(14px);
-}
-#cm-extension-mock .cm-privacy-note {
-  margin-top: 16px;
-  padding: 13px;
-  background: var(--cm-soft);
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--cm-muted);
-}
 #cm-extension-mock .cm-permission {
   background: var(--cm-soft);
   padding: 16px;
@@ -459,11 +388,6 @@
 }
 #cm-extension-mock .cm-permission .cm-actions {
   margin-top: 13px;
-}
-#cm-extension-mock .cm-inline-confirm {
-  color: var(--cm-accent);
-  font-size: 12px;
-  padding-top: 12px;
 }
 #cm-extension-mock[data-density='compact'] .cm-content {
   padding: 16px 20px;
@@ -485,11 +409,6 @@
     padding: 0 16px;
     gap: 20px;
   }
-  #cm-extension-mock .cm-tag {
-    display: block;
-    width: max-content;
-    margin: 3px 0 0;
-  }
 }
 @media (pointer: coarse) {
   #cm-extension-mock .cm-icon-button {
@@ -498,8 +417,7 @@
   }
   #cm-extension-mock .cm-tab,
   #cm-extension-mock .cm-primary,
-  #cm-extension-mock .cm-secondary-button,
-  #cm-extension-mock .cm-back {
+  #cm-extension-mock .cm-secondary-button {
     min-height: 44px;
   }
   #cm-extension-mock .cm-setting {
@@ -562,13 +480,6 @@ p {
   padding: 10px 11px;
   font-size: 12px;
   min-height: 38px;
-}
-.cm-code-input {
-  resize: vertical;
-  min-height: 76px;
-  font-family: ui-monospace, monospace;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
 }
 .cm-secondary-button {
   display: flex;
@@ -691,10 +602,6 @@ p {
   font-size: 11px;
   margin-top: 4px;
 }
-#cm-extension-mock .cm-privacy-note svg {
-  vertical-align: middle;
-  margin-right: 5px;
-}
 #cm-extension-mock .cm-avatar svg {
   width: 13px;
   height: 13px;
@@ -721,9 +628,6 @@ p {
   box-shadow: 0 8px 32px #0001;
   margin: 0;
   background: var(--cm-bg);
-}
-#cm-extension-mock .cm-status-label {
-  font-size: 10px;
 }
 .spin {
   animation: rotate 1.4s linear infinite;

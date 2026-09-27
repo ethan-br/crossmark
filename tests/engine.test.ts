@@ -1108,9 +1108,7 @@ describe('browser controls', () => {
     const { a, b } = await connectPair();
     await ready(b);
     const self = (await b.store.read()).deviceId!;
-    await expect(b.engine.command({ type: 'revoke', deviceId: self })).rejects.toThrow(
-      'Disconnect',
-    );
+    await expect(b.engine.command({ type: 'revoke', deviceId: self })).rejects.toThrow('Sign out');
     await b.engine.command({ type: 'disconnect' });
     expect((await b.store.read()).connected).toBe(false);
     expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);

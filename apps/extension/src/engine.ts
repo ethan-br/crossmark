@@ -142,7 +142,7 @@ export class Engine {
       if (['revoke', 'approve'].includes(command.type) || remotePause) await this.authorize();
       if (command.type === 'revoke') {
         if (command.deviceId === state.deviceId)
-          throw new Error('Use Disconnect on this browser to remove it.');
+          throw new Error('Use Sign out in Settings to remove this browser.');
         await this.client.mutation(api.sync.revoke, {
           deviceId: state.deviceId as Id<'devices'>,
           targetDeviceId: command.deviceId as Id<'devices'>,
@@ -163,7 +163,7 @@ export class Engine {
         if (!state.joining) await this.capture(state);
         if (state.outbox.length)
           throw new Error(
-            'Sync your pending changes before disconnecting. You can also export them from Settings.',
+            'Sync your pending changes before signing out. You can also export them from Settings.',
           );
         try {
           await this.authorize();
