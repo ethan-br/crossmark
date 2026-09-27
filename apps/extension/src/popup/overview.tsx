@@ -4,7 +4,7 @@ import type { Command } from '../engine';
 import type { State } from '../state';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ActivityList, SectionLabel } from './parts';
+import { ActivityList, SectionLabel, Stats } from './parts';
 import { relative } from './shared';
 
 export function Overview({
@@ -26,26 +26,10 @@ export function Overview({
   const review = state.status === 'review' && !state.paused;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-      <section className="chamfer border-l-2 border-primary bg-card px-4 py-3.5">
-        <dl className="flex items-baseline gap-6">
-          {[
-            [stats.bookmarks, stats.bookmarks === 1 ? 'bookmark' : 'bookmarks'],
-            [stats.folders, stats.folders === 1 ? 'folder' : 'folders'],
-          ].map(([value, label]) => (
-            <div key={label} className="flex items-baseline gap-1.5">
-              <dt className="sr-only">{label}</dt>
-              <dd className="text-2xl font-semibold tracking-tight tabular-nums">{value}</dd>
-              <span aria-hidden className="text-xs text-muted-foreground">
-                {label}
-              </span>
-            </div>
-          ))}
-        </dl>
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          {state.lastSync ? `Synced ${relative(state.lastSync)}` : 'Never synced'}
-          {pending > 0 && <span className="text-primary"> · {pending} pending</span>}
-        </p>
-      </section>
+      <Stats bookmarks={stats.bookmarks} folders={stats.folders}>
+        {state.lastSync ? `Synced ${relative(state.lastSync)}` : 'Never synced'}
+        {pending > 0 && <span className="text-primary"> · {pending} pending</span>}
+      </Stats>
       {review && (
         <section className="rounded-md border border-primary/40 bg-primary/5 px-4 py-3">
           <p className="text-sm font-medium">Approve changes</p>

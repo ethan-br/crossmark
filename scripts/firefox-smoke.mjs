@@ -39,7 +39,10 @@ try {
     `moz-extension://${uuid}/${manifest.action.default_popup}`,
   );
   await driver.setContext('content');
-  await driver.wait(until.elementLocated(By.css('#browser-name')), 15000);
+  await driver.wait(
+    until.elementLocated(By.xpath('//button[normalize-space(.)="Create account"]')),
+    15000,
+  );
   await fx(() =>
     browser.bookmarks.create({
       parentId: 'menu________',
@@ -54,11 +57,9 @@ try {
     state.baseline.some((n) => n.title === 'Native menu bookmark' && n.parentId === 'menu'),
   );
   assert.ok(state.baseline.some((n) => n.kind === 'separator'));
-  assert.equal((await driver.findElements(By.css('input'))).length, 3);
-  assert.match(
-    await driver.findElement(By.css('.cm-source-note')).getText(),
-    /signing in replaces these/,
-  );
+  await driver.findElement(By.xpath('//button[normalize-space(.)="Sign in"]')).click();
+  await driver.wait(until.elementLocated(By.css('#email')), 15000);
+  assert.equal((await driver.findElements(By.css('input'))).length, 2);
   await driver.findElement(By.css('#email')).sendKeys('smoke@example.com');
   await driver.findElement(By.css('#password')).sendKeys('not-a-real-password');
   await driver.findElement(By.xpath('//button[normalize-space(.)="Sign in"]')).click();
@@ -73,7 +74,10 @@ try {
   assert.ok(exported.nodes.some((n) => n.kind === 'separator'));
   assert.ok(!('account' in exported) && !('token' in exported));
   await driver.navigate().refresh();
-  await driver.wait(until.elementLocated(By.css('#browser-name')), 15000);
+  await driver.wait(
+    until.elementLocated(By.xpath('//button[normalize-space(.)="Create account"]')),
+    15000,
+  );
   await writeFile(
     'output/verification/firefox-login.png',
     await driver.findElement(By.css('#root')).takeScreenshot(),
@@ -93,7 +97,7 @@ try {
         checks: [
           'Built extension startup',
           'Native menu and separator read',
-          'Email/password sign-in UI',
+          'Welcome and email/password sign-in UI',
           'Failed sign-in reported',
           'No bookmark changes without login',
           'Credential-free export',

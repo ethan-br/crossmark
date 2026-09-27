@@ -22,7 +22,7 @@ import { ActivityList, BrandMark, StatusText } from './popup/parts';
 import { Overview } from './popup/overview';
 import { Browsers, type Confirmation } from './popup/browsers';
 import { Settings } from './popup/settings';
-import { SignIn } from './popup/sign-in';
+import { Onboarding } from './popup/onboarding';
 import './theme.css';
 
 const tabs = ['overview', 'activity', 'browsers'] as const;
@@ -144,17 +144,13 @@ function App() {
       ) : !main ? (
         <>
           {alert}
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="p-4 pt-2">
-              <SignIn
-                state={state}
-                busy={busy}
-                act={act}
-                reauth={reauth}
-                onCancel={() => setReauth(false)}
-              />
-            </div>
-          </ScrollArea>
+          <Onboarding
+            state={state}
+            busy={busy}
+            act={act}
+            onNavigate={() => setError('')}
+            onCancelReauth={() => setReauth(false)}
+          />
         </>
       ) : (
         <Tabs

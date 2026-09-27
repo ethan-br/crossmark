@@ -104,6 +104,7 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(() => void engine.startup());
   const commands = new Set([
     'state',
+    'signIn',
     'connect',
     'sync',
     'pause',
@@ -124,14 +125,16 @@ export default defineBackground(() => {
     )
       return false;
     const m = message as Record<string, unknown>;
-    if (m.type === 'connect') {
+    if (m.type === 'connect' || m.type === 'signIn') {
       const c = m.credentials as Record<string, unknown> | undefined;
       if (
-        typeof m.name !== 'string' ||
-        !c ||
-        typeof c.email !== 'string' ||
-        typeof c.password !== 'string' ||
-        (c.create !== undefined && typeof c.create !== 'boolean')
+        (m.type === 'connect' && typeof m.name !== 'string') ||
+        (m.type === 'signIn' && !c) ||
+        (c !== undefined &&
+          (!c ||
+            typeof c.email !== 'string' ||
+            typeof c.password !== 'string' ||
+            (c.create !== undefined && typeof c.create !== 'boolean')))
       )
         return Promise.resolve({ error: 'Invalid connection request.' });
     }

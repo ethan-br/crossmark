@@ -1186,6 +1186,61 @@ it('rejects changing accounts on an existing installation', async () => {
   expect(state.needsSignIn).toBe(true);
 });
 
+describe('sign-in before connecting', () => {
+  it('reports a new collection and registers only after connect', async () => {
+    const { t, device } = await setup();
+    const a = device('First');
+    await a.native.create({ parentId: '1', title: 'Local', url: 'https://local.example' });
+    const signedIn = (await a.engine.command({ type: 'signIn', credentials })) as State;
+    expect(signedIn.connected).toBe(false);
+    expect(signedIn.collectionExists).toBe(false);
+    expect(signedIn.baseline.map((n) => n.title)).toContain('Local');
+    expect(await t.run((ctx) => ctx.db.query('devices').collect())).toHaveLength(0);
+    await a.engine.command({ type: 'connect', name: 'First' });
+    const state = await ready(a);
+    expect(state.collectionExists).toBeUndefined();
+    expect(state.snapshot?.nodes.map((n) => n.title)).toContain('Local');
+  });
+  it('reports an existing collection without touching native bookmarks', async () => {
+    const { a, device } = await connectPair();
+    const c = device('Third');
+    const local = await c.native.create({
+      parentId: '1',
+      title: 'Mine',
+      url: 'https://mine.example',
+    });
+    const signedIn = (await c.engine.command({ type: 'signIn', credentials })) as State;
+    expect(signedIn.collectionExists).toBe(true);
+    expect(c.native.nodes.find((n) => n.id === local.id)).toBeDefined();
+    await c.engine.command({ type: 'connect', name: 'Third' });
+    await ready(c);
+    expect(c.native.nodes.find((n) => n.id === local.id)).toBeUndefined();
+    expect(c.native.nodes.some((n) => n.title === 'First bookmark')).toBe(true);
+    await ready(a);
+  });
+  it('signs out without registering when the confirmation is cancelled', async () => {
+    const { t, device } = await setup();
+    const a = device('First');
+    const signOut = vi.spyOn(a.auth, 'signOut');
+    const before = await a.store.read();
+    await a.engine.command({ type: 'signIn', credentials });
+    const state = (await a.engine.command({ type: 'disconnect' })) as State;
+    expect(signOut).toHaveBeenCalled();
+    expect(state.account).toBeUndefined();
+    expect(state.collectionExists).toBeUndefined();
+    expect(state.installationId).toBe(before.installationId);
+    expect(await t.run((ctx) => ctx.db.query('devices').collect())).toHaveLength(0);
+  });
+  it('lets an unregistered installation sign in with a different account', async () => {
+    const { device } = await setup();
+    const a = device('First');
+    await a.engine.command({ type: 'signIn', credentials });
+    a.auth.signIn = async () => ({ id: 'different-user', email: 'other@example.com', name: 'O' });
+    const state = (await a.engine.command({ type: 'signIn', credentials })) as State;
+    expect(state.account?.email).toBe('other@example.com');
+    expect(state.needsSignIn).toBe(false);
+  });
+});
 it('records connection, reconciliation, retry and bookmark diagnostics without content', async () => {
   const { debug } = await import('../apps/extension/src/debug');
   const consoleSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});

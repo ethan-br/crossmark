@@ -79,6 +79,23 @@ describe('Convex authorization and durable operations', () => {
     expect(second.joining).toBe(true);
     expect((await t.query(api.sync.snapshot, { deviceId: second.deviceId })).nodes).toHaveLength(1);
   });
+  it('reports whether connecting would join an existing collection', async () => {
+    const { t, account } = await authenticatedBackend();
+    expect(await t.query(api.sync.joinsExisting, { installationId })).toBe(false);
+    await t.mutation(api.sync.connect, {
+      installationId,
+      name: 'First',
+      browser: 'Chromium',
+      nodes: [node],
+    });
+    // The seeding installation reconnects to its own collection without replacing anything.
+    expect(await t.query(api.sync.joinsExisting, { installationId })).toBe(false);
+    expect(await t.query(api.sync.joinsExisting, { installationId: crypto.randomUUID() })).toBe(
+      true,
+    );
+    const other = await account('other@example.com');
+    expect(await other.t.query(api.sync.joinsExisting, { installationId })).toBe(false);
+  });
   it('does not import local nodes when an older joining extension calls join', async () => {
     const { t } = await setup();
     const second = await t.mutation(api.sync.connect, {
