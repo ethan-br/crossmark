@@ -45,8 +45,7 @@ export function Settings({
         </Button>
       </section>
       <p className="text-xs text-muted-foreground">
-        Bookmarks sync as they change while your browsers are running. A 30-second check catches
-        missed updates.
+        Bookmarks sync while your browsers are running. A 30-second check catches missed updates.
       </p>
       <p className="text-[11px] text-muted-foreground">v{packageJson.version}</p>
     </div>
