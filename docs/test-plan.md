@@ -33,7 +33,7 @@ The suite covers:
 
 Screenshots and results are written to `output/verification/chromium-*` and `firefox-*`. Use the manual checklist for signed-in behavior.
 
-`npm run test:debug` tests the built Chromium background diagnostics without a backend. `npm run package:firefox` and `npm run lint:firefox` validate WXT's unsigned XPI and Mozilla manifest compatibility; live signing is a separate step requiring AMO credentials. Pull-request CI runs the isolated suite and both headless smokes; see [CI and deployments](ci.md). See [WXT migration](wxt-migration.md) for production/dev paths and environment precedence.
+`npm run test:debug` tests the built Chromium background diagnostics without a backend. `npm run package:firefox` and `npm run lint:firefox` validate WXT's unsigned XPI and Mozilla manifest compatibility; live signing is a separate step requiring AMO credentials. Pull-request CI runs the isolated suite and both headless smokes; see [CI and releases](ci.md). See [WXT migration](wxt-migration.md) for production/dev paths and environment precedence.
 
 ## Manual login and sync checklist
 
