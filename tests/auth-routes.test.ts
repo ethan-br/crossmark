@@ -112,3 +112,112 @@ it('no longer offers Google login or session handoffs', async () => {
   ).toBeGreaterThanOrEqual(400);
   expect((await t.fetch('/extension/google-launch')).status).toBe(404);
 });
+it('resets with an emailed single-use code and revokes prior sessions', async () => {
+  vi.stubEnv('RESEND_API_KEY', 'test-key');
+  vi.stubEnv('AUTH_EMAIL_FROM', 'Crossmark <test@example.com>');
+  let code = '';
+  const mail = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+    const body = JSON.parse(init!.body as string);
+    code = body.text.match(/Crossmark: (\S+)/)[1];
+    return new Response('{}', { status: 200 });
+  });
+  try {
+    const { unauthenticated: t } = await authenticatedBackend();
+    const signup = await request(t, '/sign-up/email', account);
+    const oldToken = signup.headers.get('set-auth-token');
+    expect((await request(t, '/request-password-reset', { email: account.email })).status).toBe(
+      200,
+    );
+    expect(mail).toHaveBeenCalledTimes(1);
+    expect(code).toBeTruthy();
+    expect(
+      (await request(t, '/reset-password', { token: 'invalid', newPassword: 'new-password123' }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await request(t, '/reset-password', { token: code, newPassword: 'short' })).status,
+    ).toBe(400);
+    expect(
+      (await request(t, '/reset-password', { token: code, newPassword: 'new-password123' })).status,
+    ).toBe(200);
+    expect(
+      (await request(t, '/reset-password', { token: code, newPassword: 'another-password' }))
+        .status,
+    ).toBe(400);
+    expect(
+      (
+        await t.fetch('/api/auth/convex/token', {
+          headers: { Authorization: `Bearer ${oldToken}`, Origin: origin },
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (await request(t, '/sign-in/email', { email: account.email, password: 'new-password123' }))
+        .status,
+    ).toBe(200);
+  } finally {
+    mail.mockRestore();
+  }
+});
+it('deletes only the authenticated account and requires its password', async () => {
+  const { unauthenticated: t, account: other } = await authenticatedBackend();
+  const survivor = await other('survivor@example.com');
+  const signup = await request(t, '/sign-up/email', account);
+  const user = (await signup.json()).user;
+  const token = signup.headers.get('set-auth-token');
+  await t.run(async (ctx) => {
+    for (const ownerId of [user.id, (await survivor.auth.signIn()).id]) {
+      const collectionId = await ctx.db.insert('collections', {
+        ownerId,
+        nodes: [],
+        revision: 0,
+        sourceDevice: 'test',
+        createdAt: Date.now(),
+      });
+      const deviceId = await ctx.db.insert('devices', {
+        ownerId,
+        collectionId,
+        name: 'test',
+        browser: 'test',
+        lastSeen: 0,
+        cursor: 0,
+        sequence: 0,
+        revoked: false,
+      });
+      await ctx.db.insert('operations', {
+        collectionId,
+        deviceId,
+        operationId: 'op',
+        sequence: 1,
+        revision: 1,
+        nodeId: 'node',
+        title: 'test',
+        kind: 'delete',
+        device: 'test',
+        at: 0,
+        conflict: false,
+      });
+      await ctx.db.insert('backups', { collectionId, deviceId, nodes: [], at: 0, reason: 'test' });
+    }
+  });
+  const remove = (password?: string) =>
+    t.fetch('/api/auth/delete-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: origin,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ password }),
+    });
+  expect((await remove()).status).toBe(400);
+  expect((await remove('wrong-password')).status).toBe(400);
+  expect((await remove(account.password)).status).toBe(200);
+  await t.run(async (ctx) => {
+    expect(await ctx.db.query('collections').collect()).toHaveLength(1);
+    expect(await ctx.db.query('devices').collect()).toHaveLength(1);
+    expect(await ctx.db.query('backups').collect()).toHaveLength(1);
+    expect(await ctx.db.query('operations').collect()).toHaveLength(1);
+  });
+  expect((await request(t, '/sign-in/email', account)).status).toBe(401);
+});

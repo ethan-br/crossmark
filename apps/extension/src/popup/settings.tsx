@@ -1,4 +1,6 @@
 import { restoreConfirmation } from './shared';
+import { useState } from 'react';
+import { Field } from './onboarding';
 import { Download, LogOut } from 'lucide-react';
 import type { State } from '../state';
 import { Button } from '@/components/ui/button';
@@ -17,6 +19,7 @@ export function Settings({
   onExport: () => void;
   confirm: (confirmation: Confirmation) => void;
 }) {
+  const [password, setPassword] = useState('');
   return (
     <div className="flex flex-col gap-5">
       <section className="flex flex-col gap-1.5">
@@ -64,6 +67,36 @@ export function Settings({
             No original bookmarks are saved in this copy of Crossmark.
           </p>
         )}
+      </section>
+      <section className="flex flex-col gap-2">
+        <SectionLabel>Delete account</SectionLabel>
+        <p className="text-xs text-muted-foreground">
+          Permanently remove your cloud bookmarks, history, backups and all sessions. Native
+          bookmarks stay in every browser. Export first if needed.
+        </p>
+        <Field
+          id="delete-password"
+          label="Current password"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <Button
+          variant="destructive"
+          disabled={busy || !password}
+          onClick={() => {
+            confirm({
+              title: 'Permanently delete your account?',
+              body: 'This cannot be undone. All cloud data and access from every browser will be removed. Native bookmarks remain.',
+              command: { type: 'deleteAccount', password },
+              label: 'Delete account permanently',
+            });
+            setPassword('');
+          }}
+        >
+          Delete account
+        </Button>
       </section>
       <p className="text-xs text-muted-foreground">
         Bookmarks sync while your browsers are running. Crossmark also checks for updates every 30

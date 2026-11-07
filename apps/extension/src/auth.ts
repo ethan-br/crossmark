@@ -14,6 +14,9 @@ export interface Credentials {
 }
 export interface SessionAuth {
   signIn(credentials: Credentials): Promise<Account>;
+  requestReset?(email: string): Promise<void>;
+  resetPassword?(token: string, password: string): Promise<void>;
+  deleteAccount?(password: string): Promise<void>;
   token(): Promise<string>;
   signOut(): Promise<void>;
 }
@@ -117,6 +120,21 @@ export class PasswordSession implements SessionAuth {
       await browser.storage.local.set({ authSession: { ...session, token: replacement } });
     this.jwt = { value: data.token, expiresAt: Date.now() + 10 * 60_000 };
     return data.token as string;
+  }
+  async requestReset(email: string) {
+    await this.request('/request-password-reset', { email: email.trim() });
+  }
+  async resetPassword(token: string, newPassword: string) {
+    await this.request('/reset-password', { token: token.trim(), newPassword });
+    this.jwt = undefined;
+    await browser.storage.local.remove(['authSession', 'googleSession']);
+  }
+  async deleteAccount(password: string) {
+    const session = await this.stored();
+    if (!session?.token) throw new Error(signInRequired);
+    await this.request('/delete-user', { password, confirm: 'DELETE' }, session.token);
+    this.jwt = undefined;
+    await browser.storage.local.remove(['authSession', 'googleSession']);
   }
   signOut() {
     return debug.trace('auth.signOut', () => this.signOutImpl());

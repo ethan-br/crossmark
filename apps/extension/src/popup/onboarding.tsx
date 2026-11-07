@@ -35,7 +35,7 @@ function Screen({
   );
 }
 
-function Field({
+export function Field({
   id,
   label,
   ...props
@@ -106,9 +106,23 @@ function AccountForm({
   const reauth = state.connected;
   const [email, setEmail] = useState(reauth ? (state.account?.email ?? '') : '');
   const [password, setPassword] = useState('');
-  const title = create ? 'Create account' : 'Sign in';
+  const [reset, setReset] = useState(false);
+  const [code, setCode] = useState('');
+  const [sent, setSent] = useState(false);
+  const title = reset ? 'Reset password' : create ? 'Create account' : 'Sign in';
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (reset) {
+      if (!sent) {
+        if (await act({ type: 'requestReset', email })) setSent(true);
+      } else if (await act({ type: 'resetPassword', token: code, password })) {
+        setReset(false);
+        setSent(false);
+        setCode('');
+        setPassword('');
+      }
+      return;
+    }
     if (await act({ type: 'signIn', credentials: { email, password, create } })) {
       setPassword('');
       if (reauth) onBack();
@@ -119,7 +133,15 @@ function AccountForm({
       onSubmit={submit}
       actions={
         <Button disabled={busy}>
-          {busy ? (create ? 'Creating account…' : 'Signing in…') : title}
+          {reset
+            ? sent
+              ? 'Set password'
+              : 'Email reset code'
+            : busy
+              ? create
+                ? 'Creating account…'
+                : 'Signing in…'
+              : title}
         </Button>
       }
     >
@@ -139,17 +161,49 @@ function AccountForm({
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
-      <Field
-        id="password"
-        label="Password"
-        type="password"
-        autoComplete={create ? 'new-password' : 'current-password'}
-        required
-        minLength={create ? 8 : undefined}
-        maxLength={128}
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+      {reset && sent && (
+        <>
+          <p className="text-xs text-muted-foreground">
+            If an account exists, a reset code has been emailed. Paste it below. It expires in 30
+            minutes.
+          </p>
+          <Field
+            id="reset-code"
+            label="Reset code"
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+          />
+        </>
+      )}
+      {(!reset || sent) && (
+        <Field
+          id="password"
+          label="Password"
+          type="password"
+          autoComplete={create || reset ? 'new-password' : 'current-password'}
+          required
+          minLength={create || reset ? 8 : undefined}
+          maxLength={128}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      )}
+      {!create && (
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => {
+            setReset(!reset);
+            setSent(false);
+            setPassword('');
+            setCode('');
+          }}
+        >
+          {reset ? 'Return to sign in' : 'Forgot password?'}
+        </Button>
+      )}
     </Screen>
   );
 }

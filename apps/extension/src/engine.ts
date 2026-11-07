@@ -9,6 +9,9 @@ import type { Credentials, SessionAuth } from './auth';
 import { type State, type Store, initialState, publicState } from './state';
 export type Command =
   | { type: 'state' }
+  | { type: 'requestReset'; email: string }
+  | { type: 'resetPassword'; token: string; password: string }
+  | { type: 'deleteAccount'; password: string }
   | { type: 'signIn'; credentials: Credentials }
   // Without credentials, connect registers with the session from a prior signIn.
   | { type: 'connect'; name: string; choice: 'remote' | 'local'; credentials?: Credentials }
@@ -72,6 +75,24 @@ export class Engine {
       });
     return this.run(async () => {
       let state = await this.store.read();
+      if (command.type === 'requestReset') {
+        if (!this.auth?.requestReset) throw new Error('Password reset unavailable.');
+        await this.auth.requestReset(command.email);
+        return publicState(state);
+      }
+      if (command.type === 'resetPassword') {
+        if (!this.auth?.resetPassword) throw new Error('Password reset unavailable.');
+        await this.auth.resetPassword(command.token, command.password);
+        return publicState(state);
+      }
+      if (command.type === 'deleteAccount') {
+        if (!this.auth?.deleteAccount) throw new Error('Account deletion unavailable.');
+        await this.auth.deleteAccount(command.password);
+        state = { ...initialState(), roots: state.roots };
+        state.baseline = await this.adapter.read(state);
+        await this.save(state);
+        return publicState(state);
+      }
       if (command.type === 'export')
         return {
           version: 1,
