@@ -1,3 +1,4 @@
+import { recoveryCopies, recoveryNodes, type RecoverySource } from './recovery';
 import { debug } from './debug';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../../convex/_generated/api';
@@ -18,7 +19,8 @@ export type Command =
   | { type: 'approve' }
   | { type: 'disconnect' }
   | { type: 'revoke'; deviceId: string }
-  | { type: 'export' };
+  | { type: 'export' }
+  | { type: 'recover'; data: unknown; source: RecoverySource; confirmed: boolean };
 export class Engine {
   private serial: Promise<unknown> = Promise.resolve();
   private client: Pick<ConvexHttpClient, 'query' | 'mutation'>;
@@ -80,6 +82,33 @@ export class Engine {
           joinRecovery: state.joinRecovery ?? [],
           pending: state.outbox,
         };
+      if (command.type === 'recover') {
+        if (command.confirmed !== true) throw new Error('Confirm recovery before continuing.');
+        const nodes = recoveryNodes(command.data, command.source);
+        if (
+          !state.connected ||
+          state.joining ||
+          state.paused ||
+          state.outbox.length ||
+          state.journal ||
+          state.reviewCount ||
+          state.status !== 'ready'
+        )
+          throw new Error('Finish syncing and resolve pending changes before recovery.');
+        await this.adapter.recover(state, this.store);
+        await this.capture(state);
+        if (state.outbox.length) throw new Error('Sync local changes before recovery.');
+        const copies = recoveryCopies(nodes, state.baseline);
+        validateTree([...(state.snapshot?.nodes ?? state.baseline), ...copies]);
+        const operations = diff([], copies, state.sequence);
+        state.backup = state.baseline;
+        state.outbox.push(...operations);
+        state.sequence += operations.length;
+        // Commit the whole recovery intent before any remote or native write.
+        await this.save(state);
+        await this.exchange();
+        return publicState(await this.store.read());
+      }
       if (command.type === 'signIn' || (command.type === 'connect' && command.credentials)) {
         if (!this.auth) throw new Error('Sign in to continue.');
         const account = await this.auth.signIn(command.credentials!);

@@ -125,6 +125,7 @@ export default defineBackground(() => {
     'disconnect',
     'revoke',
     'export',
+    'recover',
   ]);
   browser.runtime.onMessage.addListener((message: unknown, sender: Runtime.MessageSender) => {
     if (sender.id !== browser.runtime.id || !sender.url?.startsWith(browser.runtime.getURL('')))

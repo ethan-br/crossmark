@@ -1,0 +1,11 @@
+# Bookmark recovery (v0.1)
+
+In Settings, export bookmarks regularly and keep the JSON file somewhere safe. Exports contain the cached collection (`nodes`), the last local safety snapshot (`localRecovery`), the first tree replaced on joining (`joinRecovery`), and pending sync operations. These files contain private bookmark titles and URLs.
+
+To recover, finish syncing and resolve any review or pause first. In Settings → Recover bookmarks, choose an export and select a source, or choose Use saved pre-join bookmarks. Review the record count and confirm Recover copies. The extension adds a new Recovered bookmarks folder under Other bookmarks. Review its contents and move wanted bookmarks using the browser's bookmark manager. Current bookmarks are preserved. Copies sync to other connected browsers.
+
+Recovery intentionally assigns fresh identities: it can retrieve old titles/URLs and deleted bookmarks from an older live snapshot without overwriting newer changes or fighting deletion tombstones. Repeating recovery creates another folder and duplicates. Deleted records in a snapshot and exported pending operations are not replayed. A source with only tombstones cannot recover earlier content; use an older export or safety/pre-join snapshot.
+
+The complete recovery intent and a pre-recovery local safety snapshot are saved before upload. Upload uses the normal durable operation queue and projection uses the existing native-write journal. If connectivity fails, leave the queued work intact and retry sync; do not submit the same recovery again. The source file remains the durable fallback. This is additive recovery, not an atomic cross-device rollback.
+
+Limits: recovery requires a connected, fully synced browser; exports must be version 1 Crossmark JSON (up to 8 MB through the popup). The resulting collection must fit the normal 2,000-record / 600 KB limits, including tombstones. Only live records are copied. http, https, ftp and file URLs are supported; executable and browser-specific URL schemes are rejected. Root groups are combined in the recovery folder; Chromium omits separators. Server history is not a browsable backup archive. Pre-join recovery is local to this installation and may be cleared by switching accounts or removing extension storage. Export before either action.

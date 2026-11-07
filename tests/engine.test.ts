@@ -1313,3 +1313,77 @@ it('records connection, reconciliation, retry and bookmark diagnostics without c
     consoleSpy.mockRestore();
   }
 });
+
+describe('confirmed bookmark recovery', () => {
+  it('keeps recovery queued after a failed upload and resumes without duplicate copies', async () => {
+    const { a } = await connectPair();
+    const data = await a.engine.command({ type: 'export' });
+    const mutation = a.transport.mutation.bind(a.transport);
+    const spy = vi.spyOn(a.transport, 'mutation').mockRejectedValueOnce(new TypeError('offline'));
+    await a.engine.command({ type: 'recover', data, source: 'nodes', confirmed: true });
+    const queued = await a.store.read();
+    expect(queued.outbox).toHaveLength(2);
+    expect(queued.backup).toEqual(queued.baseline);
+    spy.mockRestore();
+    a.transport.mutation = mutation;
+    await a.engine.command({ type: 'sync' });
+    const done = await ready(a);
+    expect(done.outbox).toHaveLength(0);
+    expect(done.baseline.filter((n) => n.title === 'Recovered bookmarks')).toHaveLength(1);
+  });
+
+  it('recovers overwritten and deleted content as copies without changing current bookmarks', async () => {
+    const { a, b } = await connectPair();
+    const exported = await a.engine.command({ type: 'export' });
+    const original = (await a.store.read()).baseline.find((n) => n.url)!;
+    await a.native.update((await a.store.read()).mappings[original.id], {
+      title: 'Changed',
+      url: 'https://changed.example',
+    });
+    await ready(a);
+    await expect(
+      a.engine.command({ type: 'recover', data: exported, source: 'nodes', confirmed: false }),
+    ).rejects.toThrow('Confirm');
+    await a.engine.command({ type: 'recover', data: exported, source: 'nodes', confirmed: true });
+    let state = await ready(a);
+    expect(state.baseline.some((n) => n.url === 'https://changed.example')).toBe(true);
+    const copy = state.baseline.find((n) => n.url === original.url)!;
+    expect(copy.id).not.toBe(original.id);
+    await a.native.remove(state.mappings[original.id]);
+    await ready(a);
+    await a.engine.command({ type: 'recover', data: exported, source: 'nodes', confirmed: true });
+    state = await ready(a);
+    expect(state.baseline.filter((n) => n.url === original.url)).toHaveLength(2);
+    const peer = await ready(b);
+    expect(peer.baseline.filter((n) => n.url === original.url)).toHaveLength(2);
+  });
+
+  it('rejects malformed recovery without changing native bookmarks or queue', async () => {
+    const { a } = await connectPair();
+    const before = await a.store.read();
+    for (const data of [
+      null,
+      { version: 9, nodes: [] },
+      { version: 1, nodes: [null] },
+      {
+        version: 1,
+        nodes: [
+          {
+            id: 'bad',
+            kind: 'bookmark',
+            parentId: 'missing',
+            title: 'Bad',
+            url: 'https://bad.example',
+            order: 0,
+            revision: 0,
+          },
+        ],
+      },
+    ]) {
+      await expect(
+        a.engine.command({ type: 'recover', data, source: 'nodes', confirmed: true }),
+      ).rejects.toThrow();
+    }
+    expect(await a.store.read()).toEqual(before);
+  });
+});

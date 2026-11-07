@@ -73,7 +73,7 @@ Use one Crossmark installation per independently native-synced collection. Conne
 - Firefox menu/separator handling and Chromium menu-folder projection.
 - Live Convex subscriptions trigger remote sync; a 30-second alarm catches missed updates after sleep or disconnection.
 
-Collections are capped at 2,000 records including tombstones, 600 KB and 10 connected browsers. The server processes bookmark data; end-to-end encryption is not implemented. Account deletion, retention limits, backup import, store signing, hosted production deployment and full compatibility certification remain future work. History and backups currently have no automatic expiry. Minimum build targets are Chromium 120 and Firefox 128.
+Collections are capped at 2,000 records including tombstones, 600 KB and 10 connected browsers. The server processes bookmark data; end-to-end encryption is not implemented. Account deletion, retention limits, store signing, hosted production deployment and full compatibility certification remain future work. History and backups currently have no automatic expiry. Minimum build targets are Chromium 120 and Firefox 128.
 
 ## Verify
 
@@ -114,3 +114,5 @@ An opt-in background-console mode provides structured diagnostics, JSON export a
 | `wxt.config.ts`                        | WXT builds, development browsers, packaging                       |
 | `.github/workflows`                    | Test, package, production deploy, release signing and Pullfrog    |
 | `docs`                                 | Setup, architecture, privacy, CI and validation                   |
+
+Bookmark exports and confirmed additive recovery are available in Settings. See [the recovery procedure and limits](docs/bookmark-recovery.md).
