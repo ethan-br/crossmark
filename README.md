@@ -73,7 +73,7 @@ Use one Crossmark installation per independently native-synced collection. Conne
 - Firefox menu/separator handling and Chromium menu-folder projection.
 - Live Convex subscriptions trigger remote sync; a 30-second alarm catches missed updates after sleep or disconnection.
 
-Collections are capped at 2,000 records including tombstones, 600 KB and 10 connected browsers. The server processes bookmark data; end-to-end encryption is not implemented. Account deletion, retention limits, backup import, store signing, hosted production deployment and full compatibility certification remain future work. History and backups currently have no automatic expiry. Minimum build targets are Chromium 120 and Firefox 128.
+Collections are capped at 2,000 snapshot records, 600,000 UTF-8 JSON bytes and 10 connected browsers. Deleted identities move to permanent compact fences so bookmark churn does not exhaust snapshot capacity. See [capacity and retention](docs/capacity-retention.md). The server processes bookmark data; end-to-end encryption is not implemented. Account deletion, backup import, store signing, hosted production deployment and full compatibility certification remain future work. History expires after 30 days and server backups after seven days; expiry runs hourly in bounded batches. Minimum build targets are Chromium 120 and Firefox 128.
 
 ## Verify
 

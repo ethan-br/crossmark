@@ -1,6 +1,6 @@
 import { authenticatedBackend } from './fixtures/auth';
 import { describe, it, expect } from 'vitest';
-import { api } from '../convex/_generated/api';
+import { api, internal } from '../convex/_generated/api';
 import type { Node } from '../packages/model';
 const installationId = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
 const node: Node = {
@@ -228,7 +228,7 @@ it('retains the losing edit when a tombstone wins', async () => {
     ],
   });
   const snapshot = await t.query(api.sync.snapshot, { deviceId });
-  expect(snapshot.nodes[0].deleted).toBe(true);
+  expect(snapshot.nodes).toEqual([]);
   expect(snapshot.activity.map(({ kind, title }) => ({ kind, title }))).toEqual([
     { kind: 'removed', title: 'A' },
   ]);
@@ -329,4 +329,135 @@ it('marks a browser synced only when it applies changes from elsewhere', async (
   await t.mutation(api.sync.checkpoint, { deviceId: second.deviceId, cursor: 2 });
   await t.mutation(api.sync.checkpoint, { deviceId, cursor: 2 });
   expect(await synced()).toEqual([{ title: 'First', at: expect.any(Number) }, joined]);
+});
+
+it('fences retired identities after history expiry and acknowledges old retries', async () => {
+  const { t, deviceId } = await setup();
+  const deletion = {
+    id: 'delete',
+    sequence: 1,
+    nodeId: 'a',
+    baseRevision: 1,
+    kind: 'delete' as const,
+  };
+  await t.mutation(api.sync.push, { deviceId, operations: [deletion] });
+  await t.run(async (ctx) => {
+    for (const row of await ctx.db.query('operations').collect())
+      await ctx.db.patch(row._id, { at: Date.now() - 31 * 86400000 });
+  });
+  await t.mutation(internal.maintenance.expireRetention, {});
+  expect(await t.run((ctx) => ctx.db.query('operations').collect())).toEqual([]);
+  expect(
+    (await t.mutation(api.sync.push, { deviceId, operations: [deletion] })).acknowledged,
+  ).toEqual(['delete']);
+  for (const [i, kind] of (['create', 'restore', 'update', 'delete'] as const).entries()) {
+    await t.mutation(api.sync.push, {
+      deviceId,
+      operations: [
+        {
+          id: `stale-${kind}`,
+          sequence: i + 2,
+          nodeId: 'a',
+          baseRevision: 0,
+          kind,
+          node,
+          fields: { title: 'Offline' },
+        },
+      ],
+    });
+  }
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes).toEqual([]);
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      {
+        id: 'new',
+        sequence: 6,
+        nodeId: 'fresh',
+        baseRevision: 0,
+        kind: 'create',
+        node: { ...node, id: 'fresh' },
+      },
+    ],
+  });
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes.map((n) => n.id)).toEqual([
+    'fresh',
+  ]);
+});
+
+it('frees snapshot slots for churn and fences all deleted descendants', async () => {
+  const { t, deviceId } = await setup();
+  await t.run(async (ctx) => {
+    const d = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(d.collectionId, {
+      nodes: [
+        { ...node, id: 'folder', kind: 'folder', url: undefined },
+        ...Array.from({ length: 1999 }, (_, i) => ({
+          ...node,
+          id: `child${i}`,
+          parentId: 'folder',
+        })),
+      ],
+    });
+  });
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      { id: 'remove-tree', sequence: 1, nodeId: 'folder', baseRevision: 0, kind: 'delete' },
+      {
+        id: 'fresh',
+        sequence: 2,
+        nodeId: 'fresh',
+        baseRevision: 0,
+        kind: 'create',
+        node: { ...node, id: 'fresh' },
+      },
+      {
+        id: 'stale-child',
+        sequence: 3,
+        nodeId: 'child0',
+        baseRevision: 0,
+        kind: 'create',
+        node: { ...node, id: 'child0' },
+      },
+    ],
+  });
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes.map((n) => n.id)).toEqual([
+    'fresh',
+  ]);
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(2000);
+});
+
+it('bounds recent backups and expires old backups without deleting identity fences', async () => {
+  const { t, deviceId } = await setup();
+  for (let i = 0; i < 12; i++)
+    await t.mutation(api.sync.backup, { deviceId, nodes: [node], reason: 'test' });
+  expect(await t.run((ctx) => ctx.db.query('backups').collect())).toHaveLength(10);
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [{ id: 'del', sequence: 1, nodeId: 'a', baseRevision: 1, kind: 'delete' }],
+  });
+  await t.run(async (ctx) => {
+    for (const row of await ctx.db.query('backups').collect())
+      await ctx.db.patch(row._id, { at: Date.now() - 8 * 86400000 });
+  });
+  await t.mutation(internal.maintenance.expireRetention, {});
+  expect(await t.run((ctx) => ctx.db.query('backups').collect())).toEqual([]);
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(1);
+});
+
+it('migrates existing tombstones on an empty push without changing live records', async () => {
+  const { t, deviceId } = await setup();
+  await t.run(async (ctx) => {
+    const d = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(d.collectionId, {
+      nodes: [
+        { ...node, deleted: true },
+        { ...node, id: 'live' },
+      ],
+    });
+  });
+  await t.mutation(api.sync.push, { deviceId, operations: [] });
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes.map((n) => n.id)).toEqual(['live']);
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(1);
 });

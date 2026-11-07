@@ -64,9 +64,12 @@ export const count = (nodes: Node[]) => ({
 });
 export const MAX_NODES = 2000;
 export function validateTree(nodes: Node[]) {
-  if (nodes.length > MAX_NODES || JSON.stringify(nodes).length > 600_000)
+  if (
+    nodes.length > MAX_NODES ||
+    new TextEncoder().encode(JSON.stringify(nodes)).byteLength > 600_000
+  )
     throw new Error(
-      'This v0 supports up to 2,000 records and 600 KB per collection, including recovery records.',
+      'This v0 supports up to 2,000 records and 600 KB per collection, including pending recovery records.',
     );
   const map = new Map(nodes.map((n) => [n.id, n]));
   if (map.size !== nodes.length) throw new Error('Duplicate bookmark identity.');

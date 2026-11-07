@@ -57,6 +57,11 @@ export default defineSchema({
   })
     .index('by_installation', ['ownerId', 'installationId'])
     .index('by_collection', ['collectionId']),
+  // Permanent identity-only deletion fences; never expire independently of the collection.
+  retiredNodes: defineTable({
+    collectionId: v.id('collections'),
+    nodeId: v.string(),
+  }).index('by_node', ['collectionId', 'nodeId']),
   operations: defineTable({
     collectionId: v.id('collections'),
     deviceId: v.id('devices'),
@@ -74,12 +79,16 @@ export default defineSchema({
     attempted: v.optional(node),
   })
     .index('by_operation', ['deviceId', 'operationId'])
-    .index('by_collection', ['collectionId', 'revision']),
+    .index('by_node', ['collectionId', 'nodeId', 'revision'])
+    .index('by_collection', ['collectionId', 'revision'])
+    .index('by_at', ['at']),
   backups: defineTable({
     collectionId: v.id('collections'),
     deviceId: v.id('devices'),
     nodes: v.array(node),
     at: v.number(),
     reason: v.string(),
-  }).index('by_collection', ['collectionId']),
+  })
+    .index('by_collection', ['collectionId'])
+    .index('by_at', ['at']),
 });
