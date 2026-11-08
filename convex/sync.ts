@@ -43,27 +43,35 @@ function ownedCollection(ctx: QueryCtx, ownerId: string) {
     .withIndex('by_owner', (q) => q.eq('ownerId', ownerId))
     .unique();
 }
-// Answers what connect would report as `joining`, so the popup can confirm first.
+// Report an existing collection so the popup requires a local-versus-account choice.
 export const joinsExisting = query({
   args: { installationId: v.string() },
   handler: async (ctx, { installationId }) => {
     const user = await authComponent.getAuthUser(ctx);
     if (!/^[a-f0-9-]{36}$/.test(installationId)) fail('Invalid installation ID.');
     const existing = await installation(ctx, user._id, installationId);
-    if (existing?.revoked) fail('This installation was revoked. Sign out before signing in again.');
-    if (existing) return (await ctx.db.get(existing.collectionId))?.sourceDevice !== installationId;
+    if (existing?.revoked)
+      fail('This browser was disconnected. Sign out of Crossmark here, then sign in again.');
+    if (existing) return true;
     return !!(await ownedCollection(ctx, user._id));
   },
 });
 export const connect = mutation({
-  args: { installationId: v.string(), name: v.string(), browser: v.string(), nodes: v.array(node) },
+  args: {
+    installationId: v.string(),
+    name: v.string(),
+    browser: v.string(),
+    nodes: v.array(node),
+    // Older clients only supported replacing local with remote.
+    choice: v.optional(v.union(v.literal('remote'), v.literal('local'))),
+  },
   handler: async (ctx, args) => {
     const user = await authComponent.getAuthUser(ctx);
     if (!/^[a-f0-9-]{36}$/.test(args.installationId)) fail('Invalid installation ID.');
     const existing = await installation(ctx, user._id, args.installationId);
     if (existing) {
       if (existing.revoked)
-        fail('This installation was revoked. Sign out before signing in again.');
+        fail('This browser was disconnected. Sign out of Crossmark here, then sign in again.');
       const collection = await ctx.db.get(existing.collectionId);
       return { deviceId: existing._id, joining: collection?.sourceDevice !== args.installationId };
     }
@@ -82,13 +90,14 @@ export const connect = mutation({
       });
       collection = await ctx.db.get(collectionId);
     }
-    if (!collection) return fail('Collection unavailable.');
+    if (!collection)
+      return fail('The account’s synced bookmarks are unavailable. Try again later.');
     const devices = await ctx.db
       .query('devices')
       .withIndex('by_collection', (q) => q.eq('collectionId', collection._id))
       .collect();
     if (devices.filter((d) => !d.revoked).length >= 10)
-      fail('This collection already has 10 browsers.');
+      fail('This account already has 10 connected browsers. Disconnect one before adding another.');
     const deviceId = await ctx.db.insert('devices', {
       ownerId: user._id,
       collectionId: collection._id,
@@ -100,6 +109,40 @@ export const connect = mutation({
       sequence: 0,
       revoked: false,
     });
+    if (joining && args.choice === 'local') {
+      validateTree(args.nodes);
+      // Fence replaced identities so delayed edits cannot revive the old tree.
+      const revision = collection.revision + 1;
+      const oldIds = new Set(collection.nodes.map((n) => n.id));
+      if (args.nodes.some((n) => oldIds.has(n.id)))
+        fail('Crossmark could not prepare the replacement bookmarks. Cancel and connect again.');
+      for (const n of args.nodes) {
+        const retired = await ctx.db
+          .query('retiredNodes')
+          .withIndex('by_node', (q) => q.eq('collectionId', collection!._id).eq('nodeId', n.id))
+          .unique();
+        if (retired)
+          fail('Crossmark could not prepare the replacement bookmarks. Cancel and connect again.');
+      }
+      await compactDeleted(
+        ctx,
+        collection._id,
+        collection.nodes.map((n) => ({ ...n, deleted: true, revision })),
+      );
+      const nodes = args.nodes
+        .filter((n) => !n.deleted)
+        .map((n) => ({ ...n, revision, deleted: false }));
+      validateTree(nodes);
+      await ctx.db.insert('backups', {
+        collectionId: collection._id,
+        deviceId,
+        nodes: collection.nodes,
+        at: Date.now(),
+        reason: 'Before replacing account bookmarks',
+      });
+      await ctx.db.patch(collection._id, { nodes, revision, sourceDevice: args.installationId });
+      return { deviceId, joining: false };
+    }
     if (!joining)
       await ctx.db.insert('backups', {
         collectionId: collection._id,
@@ -109,6 +152,16 @@ export const connect = mutation({
         reason: 'First browser snapshot',
       });
     return { deviceId, joining };
+  },
+});
+// A registration response may be lost after commit, so cancellation must retire
+// the authenticated installation even when the client has never received its device ID.
+export const cancelRegistration = mutation({
+  args: { installationId: v.string() },
+  handler: async (ctx, { installationId }) => {
+    const user = await authComponent.getAuthUser(ctx);
+    const device = await installation(ctx, user._id, installationId);
+    if (device && !device.revoked) await ctx.db.patch(device._id, { revoked: true });
   },
 });
 // Older extensions still call join after showing their former merge review.
@@ -129,7 +182,8 @@ export const snapshot = query({
   handler: async (ctx, { deviceId }) => {
     const device = await authenticate(ctx, deviceId);
     const collection = await ctx.db.get(device.collectionId);
-    if (!collection) return fail('Collection unavailable.');
+    if (!collection)
+      return fail('The account’s synced bookmarks are unavailable. Try again later.');
     const devices = await ctx.db
       .query('devices')
       .withIndex('by_collection', (q) => q.eq('collectionId', device.collectionId))
@@ -169,7 +223,8 @@ export const signal = query({
   handler: async (ctx, { deviceId }) => {
     const device = await authenticate(ctx, deviceId);
     const collection = await ctx.db.get(device.collectionId);
-    if (!collection) return fail('Collection unavailable.');
+    if (!collection)
+      return fail('The account’s synced bookmarks are unavailable. Try again later.');
     const devices = await ctx.db
       .query('devices')
       .withIndex('by_collection', (q) => q.eq('collectionId', device.collectionId))
@@ -190,12 +245,13 @@ export const push = mutation({
   handler: async (ctx, { deviceId, operations }) => {
     const device = await authenticate(ctx, deviceId);
     const collection = await ctx.db.get(device.collectionId);
-    if (!collection) return fail('Collection unavailable.');
+    if (!collection)
+      return fail('The account’s synced bookmarks are unavailable. Try again later.');
     if (
       operations.length > 500 ||
       new TextEncoder().encode(JSON.stringify(operations)).byteLength > 600_000
     )
-      fail('Sync batch is too large.');
+      fail('Too many bookmark changes to send at once.');
     // Move legacy/full tombstones out of the bounded snapshot atomically.
     let nodes: Node[] = await compactDeleted(ctx, collection._id, collection.nodes);
     let revision = collection.revision;
@@ -225,7 +281,7 @@ export const push = mutation({
         continue;
       }
       if (op.sequence !== sequence + 1)
-        fail('Out-of-order operation. Retry the pending batch first.');
+        fail('Some earlier bookmark changes have not been sent. Retry syncing first.');
       const retired = await ctx.db
         .query('retiredNodes')
         .withIndex('by_node', (q) => q.eq('collectionId', collection._id).eq('nodeId', op.nodeId))

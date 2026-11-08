@@ -15,6 +15,7 @@ const operations = [
   'command.pauseDevice',
   'command.approve',
   'command.export',
+  'command.restore',
   'sync.exchange',
   'sync.pause',
   'sync.capture',

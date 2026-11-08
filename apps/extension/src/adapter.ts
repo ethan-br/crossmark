@@ -89,7 +89,9 @@ export class Adapter {
         previousSyncing.other !== undefined &&
         previousSyncing.toolbar !== previousSyncing.other
       )
-        throw new Error('The bookmark toolbar and Other belong to different collections.');
+        throw new Error(
+          'The bookmarks bar and Other bookmarks use different browser sync settings. Check this browser’s bookmark sync settings before retrying.',
+        );
       for (const [key, types] of [
         ['toolbar', ['bookmarks-bar', 'bookmarks_bar']],
         ['other', ['other']],
@@ -112,11 +114,13 @@ export class Adapter {
                 ? candidates[0]
                 : undefined);
         if (!selected && candidates.length)
-          throw new Error('Multiple bookmark roots of the same type are ambiguous.');
+          throw new Error(
+            'Crossmark found more than one bookmarks bar or Other bookmarks folder and cannot choose one safely.',
+          );
         if (selected) {
           if (expectedSyncing !== undefined && selected.syncing !== expectedSyncing)
             throw new Error(
-              'The selected bookmark collection is unavailable. Sync is paused to protect its contents.',
+              'The previously selected browser bookmarks are unavailable. Crossmark has stopped syncing to protect them. Check this browser’s bookmark sync settings before retrying.',
             );
           discovered[key] = selected.id;
           if (selected.syncing !== undefined) rootSyncing[key] = selected.syncing;
@@ -127,7 +131,9 @@ export class Adapter {
         rootSyncing.other !== undefined &&
         rootSyncing.toolbar !== rootSyncing.other
       )
-        throw new Error('The bookmark toolbar and Other belong to different collections.');
+        throw new Error(
+          'The bookmarks bar and Other bookmarks use different browser sync settings. Check this browser’s bookmark sync settings before retrying.',
+        );
       const other = available.find((n) => n.id === discovered.other);
       const menuFolders = (other?.children ?? []).filter(
         (n) => n.id !== oldMobile && !n.url && !n.unmodifiable && n.title === 'Bookmarks Menu',
@@ -137,16 +143,18 @@ export class Adapter {
       );
       const menu = mapped ?? (menuFolders.length === 1 ? menuFolders[0] : undefined);
       if (!menu && menuFolders.length > 1)
-        throw new Error('Multiple Bookmarks Menu folders under Other are ambiguous.');
+        throw new Error(
+          'There is more than one Bookmarks Menu folder under Other bookmarks. Rename the extra folders before retrying.',
+        );
       if (menu) discovered.menu = menu.id;
       else if (state.roots.menu && (state.connected || state.registrationPending))
         throw new Error(
-          'A mapped bookmark root was removed. Sync is paused to protect its contents.',
+          'A bookmark folder Crossmark needs was removed. Crossmark has stopped syncing to protect your bookmarks. Restore the missing folder before retrying.',
         );
     }
     if (!discovered.toolbar || !discovered.other || (this.firefox && !discovered.menu))
       throw new Error(
-        'Your bookmark roots are unavailable. Reconnect after restoring your browser profile.',
+        'Crossmark cannot find this browser’s main bookmark folders. Restore the browser profile before reconnecting.',
       );
     // Keep an older mobile mapping by native ID, even if the wrapper was moved or renamed.
     state.roots = discovered;
@@ -221,14 +229,13 @@ export class Adapter {
       );
       const candidates = newChildren.filter(
         (n) =>
-          !j.childrenBefore?.includes(n.id) &&
           n.title === j.target.title &&
           n.url === j.target.url &&
           (n.type === 'separator') === (j.target.kind === 'separator'),
       );
       if (candidates.length > 1 || (!candidates.length && newChildren.length))
         throw new Error(
-          'An interrupted bookmark creation needs review. Export your collection before reconnecting.',
+          'Crossmark could not confirm which bookmark was created before an interruption. Export your bookmarks from Settings before reconnecting.',
         );
       if (candidates.length === 1) {
         state.mappings[j.target.id] = candidates[0].id;

@@ -1,6 +1,6 @@
 # Crossmark v0
 
-Native desktop bookmark synchronization through Convex, with a WXT-based Chromium/Firefox extension and email/password login through Convex Better Auth. Sync runs in the extension background.
+Keep your bookmarks in sync across desktop browsers with the Crossmark extension for Chromium and Firefox. Sign in with an email and password. Crossmark syncs while your browsers are running.
 
 ## Build and install
 
@@ -59,9 +59,16 @@ WXT opens the extension in a disposable browser profile and reloads it as files 
 
 Login uses an email and password stored by Better Auth in Convex. The backend needs `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` (the extension origins); follow [the setup guide](docs/auth-setup.md). Do not put backend secrets in a `VITE_` or `WXT_` variable or extension file.
 
-Create an account in the first browser, then sign in with the same email and password in each other browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically. Additional installations replace their existing bookmarks under supported portable roots with the saved collection without merging local bookmarks. The original local snapshot remains in the recovery export's `joinRecovery` field after sign-out and later large local changes. See [initialization and joining](docs/v0-decisions.md#initialization-and-joining) for details. Signing out does not delete native bookmarks or the account's server collection.
+Create an account in the first browser, then sign in with the same email and password in each other browser. A new account starts with its first browser’s bookmarks. When connecting to an existing account, choose which bookmarks to keep:
 
-Use one Crossmark installation per independently native-synced collection. Connecting installations already exchanging bookmarks through a browser vendor's sync can introduce duplicates.
+- **Use synced bookmarks:** replace this browser’s bookmarks with the account’s synced bookmarks.
+- **Use this browser’s bookmarks:** replace the account’s synced bookmarks with this browser’s bookmarks. This also replaces bookmarks on all other connected browsers.
+
+There is no merge option. Individual bookmark edits sync normally after connecting.
+
+Crossmark keeps this browser’s original bookmarks from before its first connection, even across reconnects and account changes. **Disconnect and restore** removes this browser from sync before restoring those original bookmarks. It stays disconnected until you sign in and choose which bookmarks to keep again. Signing out alone leaves current bookmarks in place. See [connecting and restoring bookmarks](docs/bookmark-recovery.md) for retry, cancellation and recovery limits.
+
+Avoid connecting two browsers that already sync bookmarks with each other through Chrome, Firefox or another browser’s own sync service: this can create duplicates.
 
 ## Included
 
@@ -73,7 +80,7 @@ Use one Crossmark installation per independently native-synced collection. Conne
 - Firefox menu/separator handling and Chromium menu-folder projection.
 - Live Convex subscriptions trigger remote sync; a 30-second alarm catches missed updates after sleep or disconnection.
 
-Collections are capped at 2,000 snapshot records, 600,000 UTF-8 JSON bytes and 10 connected browsers. Deleted identities move to permanent compact fences so bookmark churn does not exhaust snapshot capacity. See [capacity and retention](docs/capacity-retention.md). The server processes bookmark data; end-to-end encryption is not implemented. Account deletion, backup import, store signing, hosted production deployment and full compatibility certification remain future work. History expires after 30 days and server backups after seven days; expiry runs hourly in bounded batches. Minimum build targets are Chromium 120 and Firefox 128.
+Collections are capped at 2,000 snapshot records, 600,000 UTF-8 JSON bytes and 10 connected browsers. Deleted identities move to permanent compact fences so bookmark churn does not exhaust snapshot capacity. See [capacity and retention](docs/capacity-retention.md). The server processes bookmark data; end-to-end encryption is not implemented. Account deletion, store signing, hosted production deployment and full compatibility certification remain future work. History expires after 30 days and server backups after seven days; expiry runs hourly in bounded batches. Minimum build targets are Chromium 120 and Firefox 128.
 
 ## Verify
 
@@ -114,3 +121,5 @@ An opt-in background-console mode provides structured diagnostics, JSON export a
 | `wxt.config.ts`                        | WXT builds, development browsers, packaging                       |
 | `.github/workflows`                    | Test, package, production deploy, release signing and Pullfrog    |
 | `docs`                                 | Setup, architecture, privacy, CI and validation                   |
+
+Bookmark exports and Disconnect and restore are available in Settings. See [the recovery procedure and limits](docs/bookmark-recovery.md).
