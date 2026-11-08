@@ -229,7 +229,6 @@ export class Adapter {
       );
       const candidates = newChildren.filter(
         (n) =>
-          !j.childrenBefore?.includes(n.id) &&
           n.title === j.target.title &&
           n.url === j.target.url &&
           (n.type === 'separator') === (j.target.kind === 'separator'),

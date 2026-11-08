@@ -118,10 +118,8 @@ describe('background ↔ popup messaging', () => {
   it('updates the action badge from persisted public state', async () => {
     // Simulate a worker revival: empty runtime, then persisted error state.
     fakeBrowser.reset();
-    const { installBookmarkMocks, installIdentityMocks, installStorageAccessMocks } =
-      await import('./setup/wxt');
+    const { installBookmarkMocks, installStorageAccessMocks } = await import('./setup/wxt');
     installBookmarkMocks();
-    installIdentityMocks();
     installStorageAccessMocks();
     await fakeBrowser.storage.local.set({
       crossmark: { ...initialState(), status: 'error' },

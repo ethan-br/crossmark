@@ -109,20 +109,17 @@ export function activityKind(
   if (kind === 'update' && after && !after.deleted && after.parentId !== before.parentId)
     return 'moved';
 }
-export function sameNative(a: Node, b: Node) {
-  return a.kind === b.kind && keys.every((k) => a[k] === b[k]);
-}
 export function parentFirst(nodes: Node[]): Node[] {
   const result: Node[] = [];
   const todo = new Map(nodes.filter((n) => !n.deleted).map((n) => [n.id, n]));
+  // Node order is fixed throughout traversal; sort once and skip emitted nodes.
+  const ordered = [...todo.values()].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   while (todo.size) {
     let progressed = false;
-    for (const [id, n] of [...todo].sort(
-      ([, a], [, b]) => a.order - b.order || a.id.localeCompare(b.id),
-    ))
-      if (!todo.has(n.parentId)) {
+    for (const n of ordered)
+      if (todo.has(n.id) && !todo.has(n.parentId)) {
         result.push(n);
-        todo.delete(id);
+        todo.delete(n.id);
         progressed = true;
       }
     if (!progressed) throw new Error('Invalid folder hierarchy.');
