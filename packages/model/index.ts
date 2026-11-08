@@ -76,6 +76,11 @@ export function validateTree(nodes: Node[], previous?: Node[]) {
     throw new Error(
       'This v0 supports up to 2,000 records and 600 KB per collection, including pending recovery records.',
     );
+  validateTreeStructure(nodes);
+}
+
+// Capacity may be checked at the end of an atomic batch; structure never waits.
+export function validateTreeStructure(nodes: Node[]) {
   const map = new Map(nodes.map((n) => [n.id, n]));
   if (map.size !== nodes.length) throw new Error('Crossmark found duplicate bookmark data.');
   for (const n of nodes) {

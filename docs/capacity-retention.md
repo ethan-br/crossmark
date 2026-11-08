@@ -8,9 +8,11 @@ A full 2,000-to-2,000 replacement uses roughly 4,000 indexed identity lookups;
 raising MAX_NODES also requires reducing those per-transaction index ranges.
 Non-ASCII content counts by encoded bytes, not JavaScript string length.
 Existing snapshots above the new byte limit can still upload deletes and trims:
-the server validates the live result after compaction and permits strictly
-shrinking snapshots with no record-count growth until they are within budget.
-All structural checks remain enforced. New collections and backups must meet
+the server validates the final live result after atomic batch compaction and
+permits net shrinking snapshots with no record-count growth until they are
+within budget. Creates or growing edits may precede shrinking operations in the
+same batch; intermediate trees still receive all structural checks. A batch
+that neither fits nor shrinks rolls back its changes, fences, and receipts. New collections and backups must meet
 the limit outright; over-budget collections cannot grow.
 
 Every push atomically moves deleted records into `retiredNodes`, an indexed,

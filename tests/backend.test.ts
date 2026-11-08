@@ -2,6 +2,7 @@ import { authenticatedBackend } from './fixtures/auth';
 import { describe, it, expect } from 'vitest';
 import { api, internal } from '../convex/_generated/api';
 import type { Node } from '../packages/model';
+import { diff } from '../packages/sync-core';
 const installationId = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
 const node: Node = {
   id: 'a',
@@ -644,4 +645,34 @@ it('replaces a full 2,000-record collection with another full collection', async
   const snapshot = await t.query(api.sync.snapshot, { deviceId });
   expect(snapshot.nodes.map((n) => n.id)).toEqual(incoming.map((n) => n.id));
   expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(2000);
+});
+
+it('drains a mixed legacy recovery batch when creates and growing edits precede deletes', async () => {
+  const { t, deviceId } = await setup();
+  const legacy = Array.from({ length: 220 }, (_, i) => ({
+    ...node,
+    id: `legacy${i}`,
+    title: '界'.repeat(1000),
+  }));
+  legacy[0].title = 'short';
+  await t.run(async (ctx) => {
+    const device = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(device.collectionId, { nodes: legacy });
+  });
+  const desired = [
+    { ...node, id: 'fresh' },
+    ...legacy
+      .filter((_, i) => i === 0 || i > 40)
+      .map((n) => (n.id === 'legacy0' ? { ...n, title: '界'.repeat(1000) } : n)),
+  ];
+  const operations = diff(legacy, desired, 0);
+  expect(operations.slice(0, 2).map((op) => op.kind)).toEqual(['create', 'update']);
+  const response = await t.mutation(api.sync.push, { deviceId, operations });
+  expect(response.acknowledged).toEqual(operations.map((op) => op.id));
+  const snapshot = await t.query(api.sync.snapshot, { deviceId });
+  expect(snapshot.nodes).toHaveLength(181);
+  expect(snapshot.nodes.find((n) => n.id === 'fresh')).toBeDefined();
+  expect(snapshot.nodes.find((n) => n.id === 'legacy0')?.title).toBe('界'.repeat(1000));
+  expect(new TextEncoder().encode(JSON.stringify(snapshot.nodes)).byteLength).toBeLessThan(600_000);
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(40);
 });

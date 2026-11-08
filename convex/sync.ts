@@ -254,6 +254,7 @@ export const push = mutation({
       fail('Too many bookmark changes to send at once.');
     // Move legacy/full tombstones out of the bounded snapshot atomically.
     let nodes: Node[] = await compactDeleted(ctx, collection._id, collection.nodes);
+    const beforeBatch = nodes;
     let revision = collection.revision;
     let sequence = device.sequence;
     const acknowledged: string[] = [];
@@ -332,6 +333,10 @@ export const push = mutation({
       });
       acknowledged.push(op.id);
     }
+    // A queued create/growing edit can precede deletes in the durable outbox.
+    // Validate only the net persisted snapshot, rolling back all fences/receipts
+    // if the batch neither fits nor strictly shrinks a legacy over-budget tree.
+    validateTree(nodes, beforeBatch);
     await ctx.db.patch(collection._id, { nodes, revision });
     await ctx.db.patch(device._id, { sequence, lastSeen: Date.now() });
     return { acknowledged, revision };
