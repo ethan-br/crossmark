@@ -59,6 +59,11 @@ Complete [login setup](auth-setup.md), build and load both extensions in disposa
 
 ## Current verification
 
+See [authenticated sync validation](authenticated-sync-validation.md) for the
+2026-11-07 integration results, native smoke results, and explicit live-test
+blockers. The integration pass does not establish successful native
+Chromium–Firefox authenticated sync.
+
 For the WXT migration, the isolated suite, TypeScript and both production builds passed, including from a fresh `npm ci`. The built Chromium and installed Firefox 156 extensions each passed seven headless smoke checks on macOS against an unconfigured-backend HTTP fixture. Chromium debug checks and the Firefox identity/denied-callback fixture passed. Firefox lint reports zero errors and the same four warnings as the old build (minimum-version data collection declarations and bundled React `innerHTML` use).
 
 Email/password login replaced Google login after this migration. Successful live login, session renewal, authenticated native browser-to-browser sync and AMO signing were **not exercised by the migration checks**. Follow the manual checklist before release.
