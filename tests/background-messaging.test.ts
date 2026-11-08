@@ -102,6 +102,32 @@ describe('background ↔ popup messaging', () => {
     expect(commandMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { type: 'requestReset' },
+    { type: 'requestReset', email: 42 },
+    { type: 'resetPassword', token: null, password: 'password123' },
+    { type: 'resetPassword', token: 'code', password: 42 },
+    { type: 'resetPassword', token: 'code' },
+    { type: 'deleteAccount' },
+    { type: 'deleteAccount', password: false },
+  ])('rejects malformed lifecycle payloads: %j', async (message) => {
+    const [raw] = await (fakeBrowser.runtime.onMessage as MessageEvent).trigger(message, {
+      id: fakeBrowser.runtime.id,
+      url: fakeBrowser.runtime.getURL('popup.html'),
+    });
+    await expect(Promise.resolve(raw)).resolves.toEqual({ error: 'Invalid account request.' });
+    expect(commandMock).not.toHaveBeenCalled();
+  });
+
+  it.each<Command>([
+    { type: 'requestReset', email: 'a@example.com' },
+    { type: 'resetPassword', token: 'code', password: 'password123' },
+    { type: 'deleteAccount', password: 'password123' },
+  ])('accepts valid lifecycle commands: %j', async (message) => {
+    await deliverPopupCommand(message);
+    expect(commandMock).toHaveBeenCalledWith(message);
+  });
+
   it('passes sign-in and a credential-free connect through to the engine', async () => {
     const credentials = { email: 'a@example.com', password: 'secret' };
     await deliverPopupCommand({ type: 'signIn', credentials });

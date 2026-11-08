@@ -154,3 +154,30 @@ it('requires login after an expired session and still allows sign-out', async ()
   expect(await storedSession()).toBeUndefined();
   expect((await fakeBrowser.storage.local.get('googleSession')).googleSession).toBeUndefined();
 });
+
+it('explains disabled reset email and uses neutral lifecycle errors', async () => {
+  const auth = session();
+  fetchMock.mockResolvedValue(Response.json({ code: 'RESET_PASSWORD_DISABLED' }, { status: 400 }));
+  await expect(auth.requestReset('one@example.com')).rejects.toThrow(
+    'Password reset is not configured',
+  );
+  fetchMock.mockResolvedValue(Response.json({}, { status: 429 }));
+  await expect(auth.resetPassword('code', 'new-password')).rejects.toThrow(
+    'Too many attempts. Wait before trying again.',
+  );
+  fetchMock.mockResolvedValue(Response.json({}, { status: 500 }));
+  await expect(auth.requestReset('one@example.com')).rejects.toThrow(
+    'Could not complete this action',
+  );
+  fetchMock.mockResolvedValue(Response.json({}, { status: 404 }));
+  await expect(auth.requestReset('one@example.com')).rejects.toThrow(
+    'needs an update to support this action',
+  );
+});
+
+it('sends only the supported deletion body and clears the session after success', async () => {
+  await fakeBrowser.storage.local.set({ authSession: { token: 'session' } });
+  await session().deleteAccount('current-password');
+  expect(body('/delete-user')).toEqual({ password: 'current-password' });
+  expect(await storedSession()).toBeUndefined();
+});

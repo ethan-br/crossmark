@@ -64,4 +64,13 @@ For the WXT migration, the isolated suite, TypeScript and both production builds
 
 Email/password login replaced Google login after this migration. Successful live login, session renewal, authenticated native browser-to-browser sync and AMO signing were **not exercised by the migration checks**. Follow the manual checklist before release.
 
-Minimum build targets (Chromium 120 / Firefox 128), Helium, other derivatives, Windows and Linux remain unverified. Before public release, test store installation, account-root changes, browser-vendor sync interactions, force-killed workers, long offline periods, large collections, retention/account deletion and signing.
+Minimum build targets (Chromium 120 / Firefox 128), Helium, other derivatives, Windows and Linux remain unverified. Before public release, test store installation, account-root changes, browser-vendor sync interactions, force-killed workers, long offline periods, large collections, retention, account deletion at capacity and signing.
+
+## Account lifecycle release checks
+
+Use disposable test accounts and profiles only. Automated route tests mock email delivery; screenshots use fixture responses. Neither proves production delivery or large-account deletion capacity.
+
+1. Configure the backend-only Resend variables and verified sender described in [login setup](auth-setup.md#self-service-reset-and-account-deletion). With an explicitly designated test mailbox, choose Forgot password, request a code, and verify delivery and the 30-minute expiry. Unknown addresses should show the same success response. Without email configuration, confirm the UI explains that reset is unavailable.
+2. Reject an invalid, expired or previously used code and a password outside 8–128 characters. Set a valid password, confirm the old password fails and the new one works, and verify every previous browser session requires sign-in. Confirm bookmark data remains unchanged.
+3. In a disposable account with cloud bookmarks, history and backups, open Settings. Reject a wrong current password. Cancel the permanent-deletion dialog and verify the account still works. Confirm deletion with the correct password; verify owned cloud records and sessions disappear, another test account is unchanged, native bookmarks remain and other browsers require sign-in. Never run against existing user or production accounts.
+4. Validate deletion with a representative maximum-history test account. Exceeding atomic Convex limits must roll back deletion; do not claim support beyond validated capacity. Review deployment-backup retention and historical OAuth rows separately.
