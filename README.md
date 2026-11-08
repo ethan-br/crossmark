@@ -80,7 +80,7 @@ Avoid connecting two browsers that already sync bookmarks with each other throug
 - Firefox menu/separator handling and Chromium menu-folder projection.
 - Live Convex subscriptions trigger remote sync; a 30-second alarm catches missed updates after sleep or disconnection.
 
-Collections are capped at 2,000 records including tombstones, 600 KB and 10 connected browsers. The server processes bookmark data; end-to-end encryption is not implemented. Account deletion, retention limits, store signing, hosted production deployment and full compatibility certification remain future work. History and backups currently have no automatic expiry. Minimum build targets are Chromium 120 and Firefox 128.
+Collections are capped at 2,000 records including tombstones, 600 KB and 10 connected browsers. The server processes bookmark data; end-to-end encryption is not implemented. Settings supports password-confirmed account deletion, and sign-in supports emailed password reset when Resend is configured. Large-account deletion capacity, retention limits, store signing, hosted production deployment and full compatibility certification remain release work. History and backups currently have no automatic expiry. Minimum build targets are Chromium 120 and Firefox 128.
 
 ## Verify
 

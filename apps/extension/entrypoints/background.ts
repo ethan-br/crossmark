@@ -117,6 +117,9 @@ export default defineBackground(() => {
   const commands = new Set([
     'state',
     'signIn',
+    'requestReset',
+    'resetPassword',
+    'deleteAccount',
     'connect',
     'sync',
     'pause',
@@ -138,6 +141,13 @@ export default defineBackground(() => {
     )
       return false;
     const m = message as Record<string, unknown>;
+    if (
+      (m.type === 'requestReset' && typeof m.email !== 'string') ||
+      (m.type === 'resetPassword' &&
+        (typeof m.token !== 'string' || typeof m.password !== 'string')) ||
+      (m.type === 'deleteAccount' && typeof m.password !== 'string')
+    )
+      return Promise.resolve({ error: 'Invalid account request.' });
     if (m.type === 'connect' || m.type === 'signIn') {
       const c = m.credentials as Record<string, unknown> | undefined;
       if (
