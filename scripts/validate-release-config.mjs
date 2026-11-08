@@ -1,3 +1,6 @@
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 // Release artifacts must never silently target a local development backend.
 export function validateReleaseConfig(env) {
   const match = /^https:\/\/([a-z0-9-]+)\.convex\.cloud$/.exec(env.VITE_CONVEX_URL || '');
@@ -6,6 +9,9 @@ export function validateReleaseConfig(env) {
   }
 }
 
-if (process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href) {
+if (
+  process.argv[1] &&
+  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+) {
   validateReleaseConfig(process.env);
 }
