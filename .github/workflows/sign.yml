@@ -20,7 +20,7 @@ permissions:
 jobs:
   sign:
     name: Sign Firefox and publish packages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
