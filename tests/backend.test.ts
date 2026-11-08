@@ -624,3 +624,24 @@ it('rejects a distinct operation reusing a sequence while a receipt exists', asy
   ).rejects.toThrow('reused a sync sequence');
   expect((await t.query(api.sync.snapshot, { deviceId })).nodes[0].title).toBe('Accepted');
 });
+
+it('replaces a full 2,000-record collection with another full collection', async () => {
+  const { t, deviceId } = await setup();
+  const original = Array.from({ length: 2000 }, (_, i) => ({ ...node, id: `old${i}` }));
+  const incoming = Array.from({ length: 2000 }, (_, i) => ({ ...node, id: `new${i}` }));
+  await t.run(async (ctx) => {
+    const device = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(device.collectionId, { nodes: original });
+  });
+  const replacement = await t.mutation(api.sync.connect, {
+    installationId: crypto.randomUUID(),
+    name: 'Full replacement',
+    browser: 'Chrome',
+    choice: 'local',
+    nodes: incoming,
+  });
+  expect(replacement.joining).toBe(false);
+  const snapshot = await t.query(api.sync.snapshot, { deviceId });
+  expect(snapshot.nodes.map((n) => n.id)).toEqual(incoming.map((n) => n.id));
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(2000);
+});

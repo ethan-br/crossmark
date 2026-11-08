@@ -4,6 +4,8 @@ The v0.1 snapshot remains bounded to 2,000 records and 600,000 UTF-8 JSON bytes
 (with headroom below Convex's document limit). Ten active browsers may connect.
 This is a small-collection release; larger live collections require a paginated
 node store and protocol, rather than increasing the single-document limit.
+A full 2,000-to-2,000 replacement uses roughly 4,000 indexed identity lookups;
+raising MAX_NODES also requires reducing those per-transaction index ranges.
 Non-ASCII content counts by encoded bytes, not JavaScript string length.
 Existing snapshots above the new byte limit can still upload deletes and trims:
 the server validates the live result after compaction and permits strictly
