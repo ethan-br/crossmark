@@ -76,6 +76,9 @@ export class PasswordSession implements SessionAuth {
     if (response.ok) return { data, response };
     if (response.status === 401 && token) throw new Error(signInRequired);
     const message =
+      (path === '/reset-password' && data.code === 'INVALID_TOKEN'
+        ? 'That reset code is invalid or has expired. Request a new one.'
+        : undefined) ??
       messages[data.code] ??
       (response.status === 404 && !['/sign-in/email', '/sign-up/email'].includes(path)
         ? 'The Crossmark server needs an update to support this action.'

@@ -181,3 +181,12 @@ it('sends only the supported deletion body and clears the session after success'
   expect(body('/delete-user')).toEqual({ password: 'current-password' });
   expect(await storedSession()).toBeUndefined();
 });
+
+it('explains invalid or expired reset codes using the field label', async () => {
+  fetchMock.mockResolvedValue(
+    Response.json({ code: 'INVALID_TOKEN', message: 'Invalid token' }, { status: 400 }),
+  );
+  await expect(session().resetPassword('expired-code', 'new-password')).rejects.toThrow(
+    'That reset code is invalid or has expired. Request a new one.',
+  );
+});
