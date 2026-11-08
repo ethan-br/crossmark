@@ -31,13 +31,18 @@ describe('release backend configuration', () => {
   });
 });
 
-it('validates CLI invocations directly and through a symlink', () => {
+it('validates CLI invocations directly and through a symlink where supported', () => {
   const dir = mkdtempSync(join(tmpdir(), 'crossmark-release-'));
   try {
     const script = resolve('scripts/validate-release-config.mjs');
     const link = join(dir, 'release guard.mjs');
-    symlinkSync(script, link, 'file');
-    for (const entry of [script, link]) {
+    const entries = [script];
+    // Windows symlinks require Developer Mode or elevated privileges.
+    if (process.platform !== 'win32') {
+      symlinkSync(script, link, 'file');
+      entries.push(link);
+    }
+    for (const entry of entries) {
       const invalid = spawnSync(process.execPath, [entry], {
         env: {
           ...process.env,
