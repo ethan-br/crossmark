@@ -23,7 +23,7 @@ export function extensionManifest(browser: string, env: PublicEnvironment): User
   const icons = Object.fromEntries([16, 32, 48, 128].map((size) => [size, `icons/${size}.png`]));
   return {
     name: 'Crossmark',
-    description: 'Synchronize native bookmarks across desktop browsers.',
+    description: 'Keep your bookmarks in sync across desktop browsers.',
     permissions: ['bookmarks', 'storage', 'alarms'],
     host_permissions: [...new Set([`${origin}/*`, `${siteOrigin}/*`])],
     icons,

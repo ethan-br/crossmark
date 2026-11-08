@@ -12,8 +12,7 @@ WXT's development server supports extension reloads; there is no standalone simu
 `npm test` runs Vitest with `vitest.config.ts`, which loads [`WxtVitest`](https://wxt.dev/guide/essentials/unit-testing.html). Shared setup in `tests/setup/wxt.ts`:
 
 - Points `webextension-polyfill` at the in-memory fake browser (storage, runtime messaging, tabs, alarms, action).
-- Installs in-memory bookmark trees (Chromium or Firefox-shaped roots) where fake-browser leaves bookmark APIs unimplemented.
-- Stubs unused `identity` APIs so tests never touch live OAuth credentials.
+- Installs an in-memory Chromium bookmark tree where fake-browser leaves bookmark APIs unimplemented. Adapter and engine tests construct Firefox-shaped roots for browser-specific coverage.
 - Resets fake-browser state between tests.
 
 The suite covers:

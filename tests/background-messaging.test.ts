@@ -32,7 +32,7 @@ async function deliverPopupCommand<T = State>(message: Command): Promise<T> {
   });
   const result = (await Promise.resolve(raw)) as { data: T; error?: string } | false | undefined;
   if (result === false || result === undefined)
-    throw new Error('The background is restarting. Try again.');
+    throw new Error('Crossmark is restarting. Try again in a moment.');
   if (result.error) throw new Error(result.error);
   return result.data;
 }
@@ -81,8 +81,14 @@ describe('background ↔ popup messaging', () => {
   });
 
   it.each([
-    { type: 'connect', name: 'Chrome', credentials: { email: 1 } },
-    { type: 'connect', credentials: { email: 'a@example.com', password: 'secret' } },
+    { type: 'connect', choice: 'remote', name: 'Chrome', credentials: { email: 1 } },
+    {
+      type: 'connect',
+      choice: 'remote',
+      credentials: { email: 'a@example.com', password: 'secret' },
+    },
+    { type: 'connect', name: 'Chrome' },
+    { type: 'connect', name: 'Chrome', choice: 'merge' },
     { type: 'signIn' },
     { type: 'signIn', credentials: { email: 'a@example.com', password: 'secret', create: 'yes' } },
   ])('validates sign-in and connect requests before calling the engine: %j', async (message) => {
@@ -99,9 +105,9 @@ describe('background ↔ popup messaging', () => {
   it('passes sign-in and a credential-free connect through to the engine', async () => {
     const credentials = { email: 'a@example.com', password: 'secret' };
     await deliverPopupCommand({ type: 'signIn', credentials });
-    await deliverPopupCommand({ type: 'connect', name: 'Chrome' });
+    await deliverPopupCommand({ type: 'connect', choice: 'remote', name: 'Chrome' });
     expect(commandMock).toHaveBeenCalledWith({ type: 'signIn', credentials });
-    expect(commandMock).toHaveBeenCalledWith({ type: 'connect', name: 'Chrome' });
+    expect(commandMock).toHaveBeenCalledWith({ type: 'connect', choice: 'remote', name: 'Chrome' });
   });
 
   it('surfaces engine failures as popup-facing errors', async () => {
@@ -112,10 +118,8 @@ describe('background ↔ popup messaging', () => {
   it('updates the action badge from persisted public state', async () => {
     // Simulate a worker revival: empty runtime, then persisted error state.
     fakeBrowser.reset();
-    const { installBookmarkMocks, installIdentityMocks, installStorageAccessMocks } =
-      await import('./setup/wxt');
+    const { installBookmarkMocks, installStorageAccessMocks } = await import('./setup/wxt');
     installBookmarkMocks();
-    installIdentityMocks();
     installStorageAccessMocks();
     await fakeBrowser.storage.local.set({
       crossmark: { ...initialState(), status: 'error' },

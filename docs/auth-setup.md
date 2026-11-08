@@ -78,15 +78,15 @@ Better Auth's limiter is enabled explicitly (it otherwise depends on `NODE_ENV`,
 
 ## Backend and extension versions
 
-Deploy the Convex functions from the same commit as the extension build. A current extension against a backend without email/password login reports that the backend must be redeployed. An extension built before email/password login cannot sign in to a current backend; rebuild and reload it.
+Deploy the Convex functions from the same commit as the extension build. A current extension against a backend without email/password login reports that the Crossmark server needs an update before you can sign in. An extension built before email/password login cannot sign in to a current backend; rebuild and reload it.
 
 ## Troubleshooting
 
-- **Add … to AUTH_TRUSTED_ORIGINS:** add the exact extension origin shown; Firefox's profile UUID can change.
-- **Could not reach the Crossmark backend:** verify both `.env.local` backend URLs, rebuild and reload. Both origins must appear in the generated manifest's host permissions and connection policy.
+- **The Crossmark server at … has not allowed sign-in from this browser:** allow the exact extension origin shown in `AUTH_TRUSTED_ORIGINS`; Firefox's profile UUID can change.
+- **Could not reach the Crossmark server at …:** verify both `.env.local` backend URLs, rebuild and reload. Both origins must appear in the generated manifest's host permissions and connection policy.
 - **Invalid email or password:** check the credentials, or create an account first. A Google-created account needs a password [set by the operator](#setting-or-resetting-a-password).
 - **An account with this email already exists:** sign in instead of creating an account.
-- **Does not support email/password login:** deploy this version's Convex functions to the backend the extension was built for.
+- **The Crossmark server at … needs an update before you can sign in:** deploy this version's Convex functions to the backend the extension was built for.
 - **Too many attempts:** wait for the rate-limit window to pass — 5 minutes for sign-in, an hour for creating an account. The limiter counts an attempt before the origin check rejects the request, so a stale Firefox profile origin can exhaust the sign-up limit without the origin error ever appearing; fix the origin first.
 - **Sign-in required:** sign in with the same account again. Pending changes remain local. Export is available without a valid session; pausing also works without network access.
 

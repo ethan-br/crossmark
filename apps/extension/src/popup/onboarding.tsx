@@ -1,3 +1,5 @@
+import type { Confirmation } from './browsers';
+import { restoreConfirmation } from './shared';
 import { useState, type ComponentProps, type FormEvent, type ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { count } from '../../../../packages/model';
@@ -46,7 +48,13 @@ function Field({
   );
 }
 
-function Welcome({ onChoose }: { onChoose: (create: boolean) => void }) {
+function Welcome({
+  onChoose,
+  onRestore,
+}: {
+  onChoose: (create: boolean) => void;
+  onRestore?: () => void;
+}) {
   return (
     <Screen
       actions={
@@ -57,6 +65,11 @@ function Welcome({ onChoose }: { onChoose: (create: boolean) => void }) {
           <Button type="button" variant="outline" onClick={() => onChoose(true)}>
             Create account
           </Button>
+          {onRestore && (
+            <Button type="button" variant="outline" onClick={onRestore}>
+              Restore pre-Crossmark bookmarks
+            </Button>
+          )}
           <p className="pt-1 text-center text-[11px] text-muted-foreground">
             Crossmark’s server can read bookmark data.
           </p>
@@ -70,7 +83,7 @@ function Welcome({ onChoose }: { onChoose: (create: boolean) => void }) {
           <span className="text-primary">in every browser.</span>
         </h1>
         <p className="text-sm text-muted-foreground">
-          Sync native bookmarks between your desktop browsers.
+          Keep your bookmarks in sync between your desktop browsers.
         </p>
       </div>
     </Screen>
@@ -154,17 +167,30 @@ function ConfirmSync({
 }) {
   const [name, setName] = useState(state.name);
   const replaces = state.collectionExists;
+  const [choice, setChoice] = useState<'remote' | 'local' | ''>(
+    state.connectionChoice ?? (replaces ? '' : 'local'),
+  );
+  const [confirmed, setConfirmed] = useState(false);
   const stats = count(state.baseline);
   return (
     <Screen
       onSubmit={(e) => {
         e.preventDefault();
-        void act({ type: 'connect', name });
+        if (choice && (!replaces || confirmed)) void act({ type: 'connect', name, choice });
       }}
       actions={
         <>
-          <Button variant={replaces ? 'destructive' : 'default'} disabled={busy}>
-            {busy ? 'Syncing…' : replaces ? 'Overwrite and sync' : 'Start syncing'}
+          <Button
+            variant={replaces ? 'destructive' : 'default'}
+            disabled={busy || !choice || (!!replaces && !confirmed)}
+          >
+            {busy
+              ? 'Syncing…'
+              : replaces
+                ? choice === 'local'
+                  ? 'Replace account bookmarks'
+                  : 'Replace this browser’s bookmarks'
+                : 'Start syncing'}
           </Button>
           <Button
             type="button"
@@ -181,24 +207,79 @@ function ConfirmSync({
     >
       <div className="flex flex-col gap-1.5">
         <h2 className="text-lg font-semibold tracking-tight">
-          {replaces ? 'Replace this browser’s bookmarks?' : 'Start syncing?'}
+          {replaces ? 'Which bookmarks should you use?' : 'Start syncing?'}
         </h2>
         <p className="text-sm text-muted-foreground">
           {replaces
-            ? `${state.account?.email} already has synced bookmarks. They replace the bookmarks in this browser.`
-            : `This browser’s bookmarks become the collection for ${state.account?.email}.`}
+            ? `${state.account?.email} already has synced bookmarks. Choose which bookmarks to keep. The two sets will not be combined.`
+            : `This browser’s bookmarks become the synced bookmarks for ${state.account?.email}.`}
         </p>
       </div>
       <Stats bookmarks={stats.bookmarks} folders={stats.folders}>
-        {replaces ? (
-          <span className="text-destructive">will be overwritten</span>
-        ) : (
-          'will be synced'
-        )}
+        in this browser
       </Stats>
       {replaces && (
+        <>
+          <fieldset className="flex flex-col gap-3" disabled={busy || state.registrationPending}>
+            <legend className="mb-2 text-sm font-medium">Bookmarks to keep</legend>
+            <label className="flex items-start gap-2 rounded border p-3 text-sm">
+              <input
+                type="radio"
+                name="connection-choice"
+                value="remote"
+                checked={choice === 'remote'}
+                onChange={() => {
+                  setChoice('remote');
+                  setConfirmed(false);
+                }}
+              />
+              <span>
+                Use synced bookmarks
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Replace this browser’s bookmarks with the account’s synced bookmarks. Your
+                  original pre-Crossmark bookmarks stay saved for Disconnect and restore.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 rounded border p-3 text-sm">
+              <input
+                type="radio"
+                name="connection-choice"
+                value="local"
+                checked={choice === 'local'}
+                onChange={() => {
+                  setChoice('local');
+                  setConfirmed(false);
+                }}
+              />
+              <span>
+                Use this browser’s bookmarks
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Replace the account’s synced bookmarks with this browser’s bookmarks. This also
+                  replaces bookmarks on all other connected browsers.
+                </span>
+              </span>
+            </label>
+          </fieldset>
+          {!!choice && (
+            <label className="flex items-start gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+              />
+              {choice === 'local'
+                ? 'I understand this replaces bookmarks on all connected browsers.'
+                : 'I understand this replaces the bookmarks in this browser.'}
+            </label>
+          )}
+        </>
+      )}
+      {state.registrationPending && !busy && (
         <p className="text-xs text-muted-foreground">
-          A copy is kept and can be exported from Settings.
+          Crossmark could not confirm whether connecting finished. Retry with the same bookmarks
+          selected, or Cancel to choose again. Cancel needs a connection to the Crossmark server and
+          does not undo bookmarks already replaced in the account.
         </p>
       )}
       <Field
@@ -219,12 +300,14 @@ export function Onboarding({
   act,
   onNavigate,
   onCancelReauth,
+  confirm,
 }: {
   state: State;
   busy: boolean;
   act: Act;
   onNavigate: () => void;
   onCancelReauth: () => void;
+  confirm: (confirmation: Confirmation) => void;
 }) {
   const [mode, setMode] = useState<'welcome' | 'signIn' | 'create'>(
     state.connected ? 'signIn' : 'welcome',
@@ -233,6 +316,22 @@ export function Onboarding({
     onNavigate();
     setMode(next);
   }
+  if (state.restorePending)
+    return (
+      <Screen
+        actions={
+          <Button disabled={busy} onClick={() => void act({ type: 'restore', confirmed: true })}>
+            Retry restore
+          </Button>
+        }
+      >
+        <h2 className="text-lg font-semibold">Restoring pre-Crossmark bookmarks</h2>
+        <p className="text-sm text-muted-foreground">
+          This browser is disconnected. If restoration was interrupted, retry to finish. Restored
+          bookmarks will not sync to the account.
+        </p>
+      </Screen>
+    );
   if (state.connected)
     return (
       <AccountForm state={state} busy={busy} act={act} create={false} onBack={onCancelReauth} />
@@ -240,7 +339,14 @@ export function Onboarding({
   if (state.account && state.collectionExists !== undefined)
     return <ConfirmSync state={state} busy={busy} act={act} onCancel={() => go('welcome')} />;
   if (mode === 'welcome')
-    return <Welcome onChoose={(create) => go(create ? 'create' : 'signIn')} />;
+    return (
+      <Welcome
+        onChoose={(create) => go(create ? 'create' : 'signIn')}
+        onRestore={
+          state.joinRecovery !== undefined ? () => confirm(restoreConfirmation) : undefined
+        }
+      />
+    );
   return (
     <AccountForm
       key={mode}

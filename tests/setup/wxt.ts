@@ -38,14 +38,6 @@ export const chromiumBookmarkRoots: NativeNode[] = [
   { id: '2', title: 'Other Bookmarks', folderType: 'other' },
 ];
 
-/** Firefox-shaped portable roots with stable Places IDs. */
-export const firefoxBookmarkRoots: NativeNode[] = [
-  { id: 'toolbar_____', title: 'Bookmarks Toolbar' },
-  { id: 'unfiled_____', title: 'Other Bookmarks' },
-  { id: 'menu________', title: 'Bookmarks Menu' },
-  { id: 'mobile______', title: 'Mobile Bookmarks' },
-];
-
 /**
  * Replace unimplemented fake-browser bookmark methods with an in-memory tree.
  * Call after `fakeBrowser.reset()`.
@@ -67,27 +59,6 @@ export function installBookmarkMocks(roots: NativeNode[] = chromiumBookmarkRoots
   return memory;
 }
 
-/**
- * Stub identity APIs that fake-browser leaves unimplemented. Login itself uses
- * email/password over HTTP; these stubs keep boundary tests free of live OAuth.
- */
-export function installIdentityMocks() {
-  const redirect = () => `https://${fakeBrowser.runtime.id}.chromiumapp.org/`;
-  vi.spyOn(fakeBrowser.identity, 'getRedirectURL').mockImplementation(redirect);
-  vi.spyOn(fakeBrowser.identity, 'getAuthToken').mockRejectedValue(
-    new Error('identity.getAuthToken is unused; configure email/password auth'),
-  );
-  vi.spyOn(fakeBrowser.identity, 'launchWebAuthFlow').mockRejectedValue(
-    new Error('identity.launchWebAuthFlow is unused; configure email/password auth'),
-  );
-  vi.spyOn(fakeBrowser.identity, 'getProfileUserInfo').mockResolvedValue({
-    email: '',
-    id: '',
-  } as never);
-  vi.spyOn(fakeBrowser.identity, 'removeCachedAuthToken').mockResolvedValue();
-  vi.spyOn(fakeBrowser.identity, 'clearAllCachedAuthTokens').mockResolvedValue();
-}
-
 export function installStorageAccessMocks() {
   const local = fakeBrowser.storage.local as typeof fakeBrowser.storage.local & {
     setAccessLevel?: (options: { accessLevel: string }) => Promise<void>;
@@ -100,6 +71,5 @@ export function installStorageAccessMocks() {
 beforeEach(() => {
   fakeBrowser.reset();
   installBookmarkMocks();
-  installIdentityMocks();
   installStorageAccessMocks();
 });

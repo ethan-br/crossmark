@@ -66,10 +66,10 @@ export const MAX_NODES = 2000;
 export function validateTree(nodes: Node[]) {
   if (nodes.length > MAX_NODES || JSON.stringify(nodes).length > 600_000)
     throw new Error(
-      'This v0 supports up to 2,000 records and 600 KB per collection, including recovery records.',
+      'This account supports up to 2,000 bookmark records and 600 KB, including saved records of deleted bookmarks.',
     );
   const map = new Map(nodes.map((n) => [n.id, n]));
-  if (map.size !== nodes.length) throw new Error('Duplicate bookmark identity.');
+  if (map.size !== nodes.length) throw new Error('Crossmark found duplicate bookmark data.');
   for (const n of nodes) {
     if (
       !/^[A-Za-z0-9_-]{1,100}$/.test(n.id) ||
@@ -92,7 +92,7 @@ export function validateTree(nodes: Node[]) {
       seen.add(parent);
       const p = map.get(parent);
       if (!p || p.deleted || p.kind !== 'folder')
-        throw new Error('Bookmark parent is unavailable.');
+        throw new Error('The folder containing a bookmark is missing.');
       parent = p.parentId;
     }
   }

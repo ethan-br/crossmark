@@ -150,6 +150,7 @@ function App() {
             act={act}
             onNavigate={() => setError('')}
             onCancelReauth={() => setReauth(false)}
+            confirm={openConfirm}
           />
         </>
       ) : (
