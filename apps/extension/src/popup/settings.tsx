@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { recoveryNodes, recoverySources, MAX_EXPORT_BYTES, type RecoverySource } from '../recovery';
+import { restoreConfirmation } from './shared';
 import { Download, LogOut } from 'lucide-react';
 import type { State } from '../state';
 import { Button } from '@/components/ui/button';
@@ -18,15 +17,6 @@ export function Settings({
   onExport: () => void;
   confirm: (confirmation: Confirmation) => void;
 }) {
-  const [data, setData] = useState<unknown>();
-  const [source, setSource] = useState<RecoverySource>('nodes');
-  const [error, setError] = useState('');
-  let count = 0;
-  try {
-    if (data) count = recoveryNodes(data, source).length;
-  } catch {
-    /* shown on review */
-  }
   return (
     <div className="flex flex-col gap-5">
       <section className="flex flex-col gap-1.5">
@@ -56,87 +46,21 @@ export function Settings({
         </Button>
       </section>
       <section className="flex flex-col gap-2">
-        <SectionLabel>Recover bookmarks</SectionLabel>
+        <SectionLabel>Pre-Crossmark bookmarks</SectionLabel>
         <p className="text-xs text-muted-foreground">
-          Import a Crossmark JSON export, or use the saved pre-join tree. Recovery adds copies in an
-          Other bookmarks folder and syncs them to every connected browser.
+          Restore this browser’s original bookmarks from before Crossmark. This disconnects the
+          browser first. The account collection and your other browsers stay as they are.
         </p>
-        <input
-          aria-label="Crossmark recovery export"
-          type="file"
-          accept=".json,application/json"
-          disabled={busy}
-          onChange={async (event) => {
-            const file = event.target.files?.[0];
-            setData(undefined);
-            setError('');
-            if (!file) return;
-            try {
-              if (file.size > MAX_EXPORT_BYTES)
-                throw new Error('Export is too large (maximum 8 MB).');
-              const parsed: unknown = JSON.parse(await file.text());
-              recoveryNodes(parsed, 'nodes');
-              setData(parsed);
-              setSource('nodes');
-            } catch (e) {
-              setError(String(e));
-            }
-          }}
-        />
         <Button
           variant="outline"
-          disabled={busy || !state.joinRecovery?.length}
-          onClick={() => {
-            setData({ version: 1, joinRecovery: state.joinRecovery });
-            setSource('joinRecovery');
-            setError('');
-          }}
+          disabled={busy || state.joinRecovery === undefined}
+          onClick={() => confirm(restoreConfirmation)}
         >
-          Use saved pre-join bookmarks
+          Disconnect and restore
         </Button>
-        {data !== undefined && (
-          <>
-            <select
-              aria-label="Recovery source"
-              value={source}
-              onChange={(e) => setSource(e.target.value as RecoverySource)}
-            >
-              {recoverySources.map((key) => (
-                <option key={key} value={key}>
-                  {key === 'nodes'
-                    ? 'Exported collection'
-                    : key === 'localRecovery'
-                      ? 'Safety snapshot'
-                      : 'Pre-join bookmarks'}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs">
-              {count} live records selected. Deleted records and pending operations are excluded.
-            </p>
-            <Button
-              disabled={busy || !count}
-              onClick={() => {
-                try {
-                  const nodes = recoveryNodes(data, source);
-                  confirm({
-                    title: 'Recover bookmark copies?',
-                    body: `Add ${nodes.length} records in a new Recovered bookmarks folder? Existing bookmarks stay in place. Copies sync to all connected browsers. Repeating recovery creates duplicates.`,
-                    command: { type: 'recover', data, source, confirmed: true },
-                    label: 'Recover copies',
-                  });
-                } catch (e) {
-                  setError(String(e));
-                }
-              }}
-            >
-              Review recovery
-            </Button>
-          </>
-        )}
-        {error && (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
+        {state.joinRecovery === undefined && (
+          <p className="text-xs text-muted-foreground">
+            No pre-Crossmark snapshot is saved on this installation.
           </p>
         )}
       </section>

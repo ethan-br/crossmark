@@ -59,7 +59,7 @@ WXT opens the extension in a disposable browser profile and reloads it as files 
 
 Login uses an email and password stored by Better Auth in Convex. The backend needs `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` (the extension origins); follow [the setup guide](docs/auth-setup.md). Do not put backend secrets in a `VITE_` or `WXT_` variable or extension file.
 
-Create an account in the first browser, then sign in with the same email and password in each other browser. The first installation initializes the account's collection from its native bookmarks. Additional installations find that collection automatically. Additional installations replace their existing bookmarks under supported portable roots with the saved collection without merging local bookmarks. The original local snapshot remains in the recovery export's `joinRecovery` field after sign-out and later large local changes. See [initialization and joining](docs/v0-decisions.md#initialization-and-joining) for details. Signing out does not delete native bookmarks or the account's server collection.
+Create an account in the first browser, then sign in with the same email and password in each other browser. The first installation initializes the account’s collection from its native bookmarks. When connecting to an existing collection, explicitly choose to replace this browser with the account collection or replace the account collection with this browser’s bookmarks. The latter updates every connected browser. Crossmark keeps the original local tree for **Disconnect and restore**, which removes the browser from sync before restoring its pre-Crossmark bookmarks. Reconnecting requires the same collection choice again. Ordinary bookmark edits still sync normally. Signing out alone leaves current bookmarks in place. See [the connection and recovery procedure](docs/bookmark-recovery.md).
 
 Use one Crossmark installation per independently native-synced collection. Connecting installations already exchanging bookmarks through a browser vendor's sync can introduce duplicates.
 
@@ -115,4 +115,4 @@ An opt-in background-console mode provides structured diagnostics, JSON export a
 | `.github/workflows`                    | Test, package, production deploy, release signing and Pullfrog    |
 | `docs`                                 | Setup, architecture, privacy, CI and validation                   |
 
-Bookmark exports and confirmed additive recovery are available in Settings. See [the recovery procedure and limits](docs/bookmark-recovery.md).
+Bookmark exports and Disconnect and restore are available in Settings. See [the recovery procedure and limits](docs/bookmark-recovery.md).

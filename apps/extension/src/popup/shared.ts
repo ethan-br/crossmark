@@ -49,3 +49,10 @@ export function statusLabel(state: State): { label: string; tone: Tone } {
     setup: { label: 'Not signed in', tone: 'muted' as const },
   }[status];
 }
+
+export const restoreConfirmation = {
+  title: 'Disconnect and restore?',
+  body: 'This browser will leave sync and its current bookmarks will be replaced with the saved pre-Crossmark snapshot. Unsynced changes will not be uploaded. Other browsers and the account collection stay as they are. To sync again, sign in and choose which collection to keep.',
+  command: { type: 'restore', confirmed: true } as const,
+  label: 'Disconnect and restore',
+};

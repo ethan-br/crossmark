@@ -95,8 +95,8 @@ describe('Convex authorization and durable operations', () => {
       browser: 'Chromium',
       nodes: [node],
     });
-    // The seeding installation reconnects to its own collection without replacing anything.
-    expect(await t.query(api.sync.joinsExisting, { installationId })).toBe(false);
+    // Even the seeding installation must choose how to reconnect to an existing collection.
+    expect(await t.query(api.sync.joinsExisting, { installationId })).toBe(true);
     expect(await t.query(api.sync.joinsExisting, { installationId: crypto.randomUUID() })).toBe(
       true,
     );
@@ -329,4 +329,29 @@ it('marks a browser synced only when it applies changes from elsewhere', async (
   await t.mutation(api.sync.checkpoint, { deviceId: second.deviceId, cursor: 2 });
   await t.mutation(api.sync.checkpoint, { deviceId, cursor: 2 });
   expect(await synced()).toEqual([{ title: 'First', at: expect.any(Number) }, joined]);
+});
+
+describe('account replacement safety', () => {
+  it('rejects over-capacity replacement atomically and retains old data and device count', async () => {
+    const { t, deviceId } = await setup();
+    const before = await t.query(api.sync.snapshot, { deviceId });
+    const nodes = Array.from({ length: 2000 }, (_, i) => ({
+      ...node,
+      id: `incoming-${i}`,
+      order: i,
+    }));
+    await expect(
+      t.mutation(api.sync.connect, {
+        installationId: crypto.randomUUID(),
+        name: 'Incoming',
+        browser: 'Chrome',
+        choice: 'local',
+        nodes,
+      }),
+    ).rejects.toThrow('2,000');
+    const after = await t.query(api.sync.snapshot, { deviceId });
+    expect(after.nodes).toEqual(before.nodes);
+    expect(after.devices).toEqual(before.devices);
+    expect(after.revision).toBe(before.revision);
+  });
 });

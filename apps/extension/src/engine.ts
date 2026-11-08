@@ -1,4 +1,3 @@
-import { recoveryCopies, recoveryNodes, type RecoverySource } from './recovery';
 import { debug } from './debug';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../../convex/_generated/api';
@@ -12,15 +11,15 @@ export type Command =
   | { type: 'state' }
   | { type: 'signIn'; credentials: Credentials }
   // Without credentials, connect registers with the session from a prior signIn.
-  | { type: 'connect'; name: string; credentials?: Credentials }
+  | { type: 'connect'; name: string; choice: 'remote' | 'local'; credentials?: Credentials }
   | { type: 'sync' }
   | { type: 'pause' }
   | { type: 'pauseDevice'; deviceId: string; paused: boolean }
   | { type: 'approve' }
   | { type: 'disconnect' }
   | { type: 'revoke'; deviceId: string }
-  | { type: 'export' }
-  | { type: 'recover'; data: unknown; source: RecoverySource; confirmed: boolean };
+  | { type: 'restore'; confirmed: boolean }
+  | { type: 'export' };
 export class Engine {
   private serial: Promise<unknown> = Promise.resolve();
   private client: Pick<ConvexHttpClient, 'query' | 'mutation'>;
@@ -64,7 +63,7 @@ export class Engine {
         if (state.connected || state.registrationPending) return publicState(state);
         return this.run(async () => {
           const fresh = await this.store.read();
-          if (!fresh.connected && !fresh.registrationPending) {
+          if (!fresh.connected && !fresh.registrationPending && !fresh.restorePending) {
             fresh.baseline = await this.adapter.read(fresh);
             await this.save(fresh);
           }
@@ -82,33 +81,41 @@ export class Engine {
           joinRecovery: state.joinRecovery ?? [],
           pending: state.outbox,
         };
-      if (command.type === 'recover') {
-        if (command.confirmed !== true) throw new Error('Confirm recovery before continuing.');
-        const nodes = recoveryNodes(command.data, command.source);
-        if (
-          !state.connected ||
-          state.joining ||
-          state.paused ||
-          state.outbox.length ||
-          state.journal ||
-          state.reviewCount ||
-          state.status !== 'ready'
-        )
-          throw new Error('Finish syncing and resolve pending changes before recovery.');
-        await this.adapter.recover(state, this.store);
-        await this.capture(state);
-        if (state.outbox.length) throw new Error('Sync local changes before recovery.');
-        const copies = recoveryCopies(nodes, state.baseline);
-        validateTree([...(state.snapshot?.nodes ?? state.baseline), ...copies]);
-        const operations = diff([], copies, state.sequence);
-        state.backup = state.baseline;
-        state.outbox.push(...operations);
-        state.sequence += operations.length;
-        // Commit the whole recovery intent before any remote or native write.
-        await this.save(state);
-        await this.exchange();
+      if (command.type === 'restore') {
+        if (command.confirmed !== true) throw new Error('Confirm disconnect and restore first.');
+        if (!state.restorePending) {
+          if (state.joinRecovery === undefined)
+            throw new Error('No pre-Crossmark snapshot is saved.');
+          if (state.registrationPending) throw new Error('Finish connecting before restoring.');
+          await this.adapter.recover(state, this.store);
+          state.backup = await this.adapter.read(state);
+          validateTree(state.joinRecovery);
+          // Revoke first: failure leaves the browser connected and retryable without touching its tree.
+          if (state.deviceId) {
+            await this.authorize();
+            try {
+              await this.client.mutation(api.sync.revoke, {
+                deviceId: state.deviceId as Id<'devices'>,
+                targetDeviceId: state.deviceId as Id<'devices'>,
+              });
+            } catch (error) {
+              if (!/This browser is disconnected/.test(String(error))) throw error;
+            }
+          }
+          state.restorePending = { nodes: structuredClone(state.joinRecovery) };
+          // Detach durably before any native write. Events cannot upload restoration.
+          state.connected = false;
+          state.outbox = [];
+          state.joining = true;
+          state.joinWiped = false;
+          await this.save(state);
+        }
+        await this.restoreLocal();
         return publicState(await this.store.read());
       }
+      if (state.restorePending) throw new Error('Finish restoring pre-Crossmark bookmarks first.');
+      if (command.type === 'connect' && !['remote', 'local'].includes(command.choice))
+        throw new Error('Choose whether to use synced bookmarks or this browser’s bookmarks.');
       if (command.type === 'signIn' || (command.type === 'connect' && command.credentials)) {
         if (!this.auth) throw new Error('Sign in to continue.');
         const account = await this.auth.signIn(command.credentials!);
@@ -130,7 +137,6 @@ export class Engine {
           state.baseline = [];
           state.initialized = false;
           delete state.installedAccountId;
-          delete state.joinRecovery;
         }
         state.account = account;
         state.needsSignIn = false;
@@ -158,7 +164,28 @@ export class Engine {
         state.name = command.name.trim();
         if (!state.name || state.name.length > 80)
           throw new Error('Enter a browser name (up to 80 characters).');
-        const local = state.registrationPending ? state.baseline : await this.adapter.read(state);
+        let local = state.registrationPending ? state.baseline : await this.adapter.read(state);
+        if (
+          state.registrationPending &&
+          state.connectionChoice &&
+          state.connectionChoice !== command.choice
+        )
+          throw new Error('Retry the original connection choice before choosing another.');
+        // Preserve the first pre-Crossmark tree, including an empty tree.
+        state.joinRecovery ??= structuredClone(local);
+        if (!state.registrationPending && command.choice === 'local') {
+          const ids = new Map(local.map((n) => [n.id, crypto.randomUUID()]));
+          const mappings: Record<string, string> = {};
+          for (const n of local) mappings[ids.get(n.id)!] = state.mappings[n.id];
+          local = local.map((n) => ({
+            ...n,
+            id: ids.get(n.id)!,
+            parentId: ids.get(n.parentId) ?? n.parentId,
+            revision: 0,
+          }));
+          state.mappings = mappings;
+        }
+        state.connectionChoice = command.choice;
         validateTree(local);
         state.backup = local;
         state.baseline = local;
@@ -169,10 +196,12 @@ export class Engine {
           name: state.name,
           browser: state.browser,
           nodes: local,
+          choice: command.choice,
         });
         state.deviceId = result.deviceId;
         state.connected = true;
         state.registrationPending = false;
+        delete state.connectionChoice;
         delete state.collectionExists;
         state.status = 'syncing';
         state.joining = result.joining;
@@ -250,6 +279,7 @@ export class Engine {
           ...initialState(),
           roots: state.roots,
           joinRecovery: state.joinRecovery,
+          backup: state.backup,
           ...(installedAccountId
             ? {
                 mappings: state.mappings,
@@ -338,6 +368,37 @@ export class Engine {
     state.status = 'paused';
     await this.save(state);
   }
+  private async restoreLocal() {
+    let state = await this.store.read();
+    if (!state.restorePending) return;
+    try {
+      await this.adapter.recover(state, this.store);
+      state.baseline = await this.adapter.read(state);
+      await this.save(state);
+      await this.adapter.ensureRoots(state, this.store, state.restorePending.nodes);
+      if (!(await this.project(state, state.restorePending.nodes)))
+        throw new Error('Bookmarks changed during restoration. Retry to finish restoring.');
+      await this.auth?.signOut();
+      state = {
+        ...initialState(),
+        roots: state.roots,
+        mappings: state.mappings,
+        baseline: state.baseline,
+        rootSyncing: state.rootSyncing,
+        joinRecovery: state.joinRecovery,
+        backup: state.backup,
+      };
+      await this.save(state);
+    } catch (error) {
+      state = await this.store.read();
+      state.connected = false;
+      state.status = 'error';
+      state.error =
+        error instanceof Error ? error.message : 'Could not restore bookmarks. Retry to finish.';
+      await this.save(state);
+      throw error;
+    }
+  }
   startup() {
     return this.run(async () => {
       const state = await this.store.read();
@@ -367,6 +428,7 @@ export class Engine {
   }
   private async exchange() {
     let state = await this.store.read();
+    if (state.restorePending) return this.restoreLocal();
     if (!state.connected || !state.deviceId) {
       debug.event('sync.exchange', 'disconnected');
       return;
