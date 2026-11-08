@@ -676,3 +676,58 @@ it('drains a mixed legacy recovery batch when creates and growing edits precede 
   expect(new TextEncoder().encode(JSON.stringify(snapshot.nodes)).byteLength).toBeLessThan(600_000);
   expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(40);
 });
+
+it('acknowledges unchanged legacy snapshots after lost responses, expiry and retired conflicts', async () => {
+  const { t, deviceId } = await setup();
+  const legacy = Array.from({ length: 220 }, (_, i) => ({
+    ...node,
+    id: `legacy${i}`,
+    title: '界'.repeat(1000),
+  }));
+  await t.run(async (ctx) => {
+    const device = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(device.collectionId, { nodes: legacy });
+  });
+  const operations = [
+    { id: 'shrink', sequence: 1, nodeId: 'legacy0', kind: 'delete' as const, baseRevision: 0 },
+  ];
+  await t.mutation(api.sync.push, { deviceId, operations });
+  const committed = await t.query(api.sync.snapshot, { deviceId });
+  expect(new TextEncoder().encode(JSON.stringify(committed.nodes)).byteLength).toBeGreaterThan(
+    600_000,
+  );
+  expect((await t.mutation(api.sync.push, { deviceId, operations })).acknowledged).toEqual([
+    'shrink',
+  ]);
+  expect((await t.query(api.sync.snapshot, { deviceId })).revision).toBe(committed.revision);
+  await t.run(async (ctx) => {
+    for (const op of await ctx.db.query('operations').collect())
+      await ctx.db.patch(op._id, { at: Date.now() - 31 * 86400000 });
+  });
+  await t.mutation(internal.maintenance.expireRetention, {});
+  expect((await t.mutation(api.sync.push, { deviceId, operations })).acknowledged).toEqual([
+    'shrink',
+  ]);
+  expect((await t.mutation(api.sync.push, { deviceId, operations: [] })).acknowledged).toEqual([]);
+  const conflicts = [
+    {
+      id: 'stale-create',
+      sequence: 2,
+      nodeId: 'legacy0',
+      kind: 'create' as const,
+      baseRevision: 0,
+      node: legacy[0],
+    },
+  ];
+  expect(
+    (await t.mutation(api.sync.push, { deviceId, operations: conflicts })).acknowledged,
+  ).toEqual(['stale-create']);
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes).toEqual(committed.nodes);
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      { id: 'continue', sequence: 3, nodeId: 'legacy1', kind: 'delete', baseRevision: 0 },
+    ],
+  });
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes).toHaveLength(218);
+});

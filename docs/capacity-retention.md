@@ -11,8 +11,10 @@ Existing snapshots above the new byte limit can still upload deletes and trims:
 the server validates the final live result after atomic batch compaction and
 permits net shrinking snapshots with no record-count growth until they are
 within budget. Creates or growing edits may precede shrinking operations in the
-same batch; intermediate trees still receive all structural checks. A batch
-that neither fits nor shrinks rolls back its changes, fences, and receipts. New collections and backups must meet
+same batch; intermediate trees still receive all structural checks. Unchanged snapshots are also accepted so receipt-only retries, empty pushes,
+and retired-identity conflicts can drain while over budget. A batch that
+changes the snapshot but neither fits nor shrinks rolls back its changes,
+fences, and receipts. New collections and backups must meet
 the limit outright; over-budget collections cannot grow.
 
 Every push atomically moves deleted records into `retiredNodes`, an indexed,

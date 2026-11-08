@@ -336,7 +336,9 @@ export const push = mutation({
     // A queued create/growing edit can precede deletes in the durable outbox.
     // Validate only the net persisted snapshot, rolling back all fences/receipts
     // if the batch neither fits nor strictly shrinks a legacy over-budget tree.
-    validateTree(nodes, beforeBatch);
+    // Receipt-only retries and retired-identity conflicts must drain even while
+    // a legacy snapshot is over budget. They cannot increase stored capacity.
+    if (JSON.stringify(nodes) !== JSON.stringify(beforeBatch)) validateTree(nodes, beforeBatch);
     await ctx.db.patch(collection._id, { nodes, revision });
     await ctx.db.patch(device._id, { sequence, lastSeen: Date.now() });
     return { acknowledged, revision };
