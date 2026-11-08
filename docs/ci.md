@@ -20,7 +20,7 @@ Set these repository variables to the production functions and HTTP origins:
 | `VITE_CONVEX_URL`      | `https://<deployment>.convex.cloud` |
 | `VITE_CONVEX_SITE_URL` | `https://<deployment>.convex.site`  |
 
-Set `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` as repository secrets. The sign workflow requires all four values and fails before building if any are missing. AMO credentials are only used by the release workflow.
+Set `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` as repository secrets. The sign workflow requires all four values and fails before building if any are missing. Release origins must be paired HTTPS Convex origins; loopback development URLs are rejected. Signing checks out the tag explicitly and requires its commit to be on main. AMO credentials are only used by the release workflow.
 
 Create a `production` GitHub environment with a `CONVEX_DEPLOY_KEY` environment secret for the production Convex deployment. Use a production deployment key, whose value starts with `prod:`. Configure `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` on that deployment, and set the repository's `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` to its matching `convex.cloud` and `convex.site` origins. The deploy workflow checks that the key and both origins name the same deployment. It runs only when manually dispatched; it does not create a Convex deployment or configure its environment variables.
 
@@ -50,3 +50,5 @@ npm run package
 Browser smoke checks expect the unconfigured local backend. See [the test plan](test-plan.md).
 
 Development browsers: `npm run dev` / `npm run dev:firefox` open Chrome and Firefox binaries discovered from `CHROME_BINARY` / `FIREFOX_BINARY` or standard install paths. Set `WXT_OPEN_BROWSER=0` to skip launching a window. Personal persistent profiles belong in the ignored `web-ext.config.ts`, not in `wxt.config.ts`.
+
+See [v0.1 release readiness evidence](v01-release-readiness.md) for the dated audit, artifact checks and outstanding platform/upgrade limitations.
