@@ -90,7 +90,7 @@ export function Settings({
               title: 'Permanently delete your account?',
               body: 'This cannot be undone. All cloud data and access from every browser will be removed. Native bookmarks remain.',
               command: { type: 'deleteAccount', password },
-              label: 'Delete account permanently',
+              label: 'Delete account',
             });
             setPassword('');
           }}
