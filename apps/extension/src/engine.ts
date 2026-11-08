@@ -220,7 +220,18 @@ export class Engine {
         return publicState(await this.store.read());
       }
       if (command.type === 'disconnect' && !state.connected) {
-        // Signed in but not registered: keep the installation so a pending registration can resume.
+        if (state.registrationPending) {
+          await this.authorize();
+          await this.client.mutation(api.sync.cancelRegistration, {
+            installationId: state.installationId,
+          });
+          // Never reuse a possibly committed registration after the user cancels.
+          state.installationId = crypto.randomUUID();
+          delete state.registrationPending;
+          delete state.connectionChoice;
+          state.baseline = await this.adapter.read(state);
+          await this.save(state);
+        }
         await this.auth?.signOut();
         delete state.account;
         delete state.collectionExists;

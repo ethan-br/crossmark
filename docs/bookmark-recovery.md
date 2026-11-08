@@ -5,6 +5,8 @@ When connecting to an existing account, choose one collection explicitly:
 - **Use synced bookmarks:** replace the bookmarks in this browser with the account collection. The original local tree is saved before registration or replacement.
 - **Use this browser’s bookmarks:** replace the account collection with this browser’s current tree. All connected browsers receive this replacement. Confirm the account-wide change before continuing. The previous account collection is saved in a server recovery snapshot; server snapshots are not currently browsable in the popup.
 
+If a connection fails, retry the same choice or Cancel. Cancellation checks the server for a possibly completed registration, retires it, and unlocks both choices. It requires a connection to the server; it does not undo an account replacement that already committed.
+
 There is no merge option. A new account starts with its first browser’s bookmarks. Once connected, individual additions, edits, moves, and deletions continue syncing normally, with existing large-change review protection.
 
 ## Disconnect and restore

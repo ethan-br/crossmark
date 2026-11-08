@@ -128,6 +128,16 @@ export const connect = mutation({
     return { deviceId, joining };
   },
 });
+// A registration response may be lost after commit, so cancellation must retire
+// the authenticated installation even when the client has never received its device ID.
+export const cancelRegistration = mutation({
+  args: { installationId: v.string() },
+  handler: async (ctx, { installationId }) => {
+    const user = await authComponent.getAuthUser(ctx);
+    const device = await installation(ctx, user._id, installationId);
+    if (device && !device.revoked) await ctx.db.patch(device._id, { revoked: true });
+  },
+});
 // Older extensions still call join after showing their former merge review.
 // Return no adopted identities so they install the cloud tree without adding
 // local bookmarks to it. New extensions never call this mutation.

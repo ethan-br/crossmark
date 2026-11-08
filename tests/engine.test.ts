@@ -1558,3 +1558,123 @@ describe('explicit connection choice and detached restoration', () => {
     expect((await ready(a)).baseline).toHaveLength(1);
   });
 });
+
+describe('cancelling a failed registration', () => {
+  it('unlocks both choices and restoration, and reads fresh native data before replacing another account', async () => {
+    const { a, device, account } = await connectPair();
+    const c = device('Pending');
+    await c.native.create({ parentId: '1', title: 'Original', url: 'https://original.example' });
+    const spy = vi.spyOn(c.transport, 'mutation').mockRejectedValueOnce(new TypeError('offline'));
+    await expect(
+      c.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Pending' }),
+    ).rejects.toThrow('offline');
+    spy.mockRestore();
+    await c.engine.command({ type: 'disconnect' });
+    const cancelled = await c.store.read();
+    expect(cancelled.registrationPending).toBeUndefined();
+    expect(cancelled.connectionChoice).toBeUndefined();
+    await c.engine.command({ type: 'restore', confirmed: true });
+    await c.native.create({
+      parentId: '1',
+      title: 'Added after cancellation',
+      url: 'https://fresh.example',
+    });
+    const other = await account('other-account@example.com');
+    c.auth.signIn = other.auth.signIn;
+    c.auth.token = other.auth.token;
+    c.transport.query = other.t.query.bind(other.t) as typeof c.transport.query;
+    c.transport.mutation = other.t.mutation.bind(other.t) as typeof c.transport.mutation;
+    await c.engine.command({ type: 'signIn', credentials });
+    expect((await c.store.read()).baseline.filter((n) => n.url)).toHaveLength(2);
+    await c.engine.command({ type: 'connect', choice: 'local', name: 'Other account' });
+    expect((await ready(c)).baseline.map((n) => n.url).sort()).toEqual([
+      'https://fresh.example',
+      'https://original.example',
+    ]);
+    expect((await ready(a)).baseline.map((n) => n.url)).toEqual(['https://one.example']);
+  });
+
+  it('retires a registration with a lost acknowledgement before allowing the opposite choice', async () => {
+    const { device, t } = await connectPair();
+    const c = device('Pending');
+    await c.native.create({ parentId: '1', title: 'Mine', url: 'https://mine.example' });
+    const installationId = (await c.store.read()).installationId;
+    const mutation = c.transport.mutation.bind(c.transport);
+    let lost = false;
+    c.transport.mutation = (async (...args: Parameters<typeof mutation>) => {
+      const value = await mutation(args[0], args[1]);
+      if (!lost) {
+        lost = true;
+        throw new TypeError('Lost registration response');
+      }
+      return value;
+    }) as typeof mutation;
+    await expect(
+      c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Pending' }),
+    ).rejects.toThrow('Lost registration');
+    await c.engine.command({ type: 'disconnect' });
+    expect((await c.store.read()).installationId).not.toBe(installationId);
+    const devices = await t.run((ctx) => ctx.db.query('devices').collect());
+    expect(devices.find((d) => d.installationId === installationId)?.revoked).toBe(true);
+    await c.engine.command({
+      type: 'connect',
+      choice: 'local',
+      credentials,
+      name: 'Try other choice',
+    });
+    expect((await ready(c)).baseline.map((n) => n.url)).toEqual(['https://mine.example']);
+  });
+
+  it('keeps cancellation retryable if the server cannot confirm revocation', async () => {
+    const { device } = await connectPair();
+    const c = device('Pending');
+    const spy = vi.spyOn(c.transport, 'mutation').mockRejectedValueOnce(new TypeError('offline'));
+    await expect(
+      c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Pending' }),
+    ).rejects.toThrow('offline');
+    spy.mockRejectedValueOnce(new TypeError('Cannot cancel offline'));
+    await expect(c.engine.command({ type: 'disconnect' })).rejects.toThrow('Cannot cancel offline');
+    expect((await c.store.read()).registrationPending).toBe(true);
+    spy.mockRestore();
+    await c.engine.command({ type: 'disconnect' });
+    expect((await c.store.read()).registrationPending).toBeUndefined();
+  });
+});
+
+it('does not carry a cancelled registration baseline through an installed-account switch', async () => {
+  const { a, account } = await connectPair();
+  const installed = (await a.store.read()).installedAccountId;
+  await a.engine.command({ type: 'disconnect' });
+  const spy = vi
+    .spyOn(a.transport, 'mutation')
+    .mockRejectedValueOnce(new TypeError('Failed connect'));
+  await expect(
+    a.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Reconnect' }),
+  ).rejects.toThrow('Failed connect');
+  spy.mockRestore();
+  await a.engine.command({ type: 'disconnect' });
+  await a.native.create({
+    parentId: '1',
+    title: 'Fresh native edit',
+    url: 'https://fresh.example',
+  });
+  expect((await a.store.read()).installedAccountId).toBe(installed);
+  const other = await account('replacement-target@example.com');
+  await other.t.mutation(api.sync.connect, {
+    installationId: crypto.randomUUID(),
+    name: 'Other seed',
+    browser: 'Chrome',
+    nodes: [],
+  });
+  a.auth.signIn = other.auth.signIn;
+  a.auth.token = other.auth.token;
+  a.transport.query = other.t.query.bind(other.t) as typeof a.transport.query;
+  a.transport.mutation = other.t.mutation.bind(other.t) as typeof a.transport.mutation;
+  await a.engine.command({ type: 'signIn', credentials });
+  expect((await a.store.read()).baseline.filter((n) => n.url)).toHaveLength(2);
+  await a.engine.command({ type: 'connect', choice: 'local', name: 'Replace other account' });
+  expect((await ready(a)).baseline.map((n) => n.url).sort()).toEqual([
+    'https://fresh.example',
+    'https://one.example',
+  ]);
+});
