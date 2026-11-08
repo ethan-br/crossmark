@@ -205,7 +205,6 @@ export class Engine {
         delete state.collectionExists;
         state.status = 'syncing';
         state.joining = result.joining;
-        if (state.joining && !previouslyInstalled) state.joinRecovery ??= local;
         // A reconnect to the same collection already has native mappings.
         // Reconcile against them without repeating the first-time wipe.
         state.joinWiped = result.joining && previouslyInstalled ? true : undefined;
