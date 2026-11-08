@@ -1,5 +1,6 @@
 import {
   isRoot,
+  alive,
   validateTree,
   type ActivityKind,
   type Node,
@@ -36,6 +37,7 @@ export function applyOperation(
   nodes: Node[],
   op: Operation,
   revision: number,
+  compactingSnapshot = false,
 ): { nodes: Node[]; before?: Node; after?: Node; conflict: boolean } {
   const map = new Map(nodes.map((n) => [n.id, { ...n }]));
   const before = map.get(op.nodeId);
@@ -91,7 +93,12 @@ export function applyOperation(
     }
   }
   const result = [...map.values()];
-  validateTree(result);
+  // Backend deletion fences are written atomically with snapshot compaction.
+  // Validate the persisted live snapshot, allowing legacy over-budget trees to shrink.
+  validateTree(
+    compactingSnapshot ? alive(result) : result,
+    compactingSnapshot ? alive(nodes) : undefined,
+  );
   return { nodes: result, before, after, conflict };
 }
 // Title/URL edits, reorders within a folder, stale edits to tombstones and

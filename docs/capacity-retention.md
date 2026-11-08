@@ -5,6 +5,11 @@ The v0.1 snapshot remains bounded to 2,000 records and 600,000 UTF-8 JSON bytes
 This is a small-collection release; larger live collections require a paginated
 node store and protocol, rather than increasing the single-document limit.
 Non-ASCII content counts by encoded bytes, not JavaScript string length.
+Existing snapshots above the new byte limit can still upload deletes and trims:
+the server validates the live result after compaction and permits strictly
+shrinking snapshots with no record-count growth until they are within budget.
+All structural checks remain enforced. New collections and backups must meet
+the limit outright; over-budget collections cannot grow.
 
 Every push atomically moves deleted records into `retiredNodes`, an indexed,
 identity-only deletion fence scoped to the collection. Existing full tombstones
@@ -28,7 +33,13 @@ backlogs. The backup endpoint retains up to ten recent backups per collection
 not an exact deletion deadline. Installation sequence high-water marks survive
 history expiry and acknowledge retried accepted sequences without reapplying them.
 Clients must never reuse a sequence for new work, as already required by the
-ordered outbox protocol. Recent history can retain losing edits; after expiry,
+ordered outbox protocol. While history receipts exist, a different operation
+reusing an accepted sequence is rejected. After expiry, the high-water mark
+cannot distinguish a retry from incorrectly reused sequences. Restoring or
+cloning extension storage with an existing device ID is unsupported: export
+local bookmarks, disconnect, and reconnect to obtain a fresh installation and
+device identity before uploading new work. Never run two copies of the same
+device identity. Recent history can retain losing edits; after expiry,
 server history is no longer a recovery source. Local recovery/export remains
 separate from server retention.
 

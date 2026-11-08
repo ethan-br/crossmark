@@ -269,6 +269,14 @@ export const push = mutation({
         fail('Invalid operation version.');
       // Sequence is the durable receipt after detailed history has expired.
       if (op.sequence <= sequence) {
+        const receipt = await ctx.db
+          .query('operations')
+          .withIndex('by_sequence', (q) => q.eq('deviceId', device._id).eq('sequence', op.sequence))
+          .unique();
+        if (receipt && receipt.operationId !== op.id)
+          fail(
+            'This browser reused a sync sequence. Export local bookmarks, then disconnect and reconnect.',
+          );
         acknowledged.push(op.id);
         continue;
       }
@@ -301,7 +309,7 @@ export const push = mutation({
       // a retired identity, even for an arbitrarily old offline installation.
       const result = retired
         ? { nodes, before: prior?.after, after: prior?.after, conflict: true }
-        : applyOperation(nodes, op, revision);
+        : applyOperation(nodes, op, revision, true);
       nodes = await compactDeleted(ctx, collection._id, result.nodes);
       sequence = op.sequence;
       await ctx.db.insert('operations', {

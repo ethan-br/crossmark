@@ -528,3 +528,99 @@ it('fences replaced account identities and refuses their reuse in another replac
     (await t.query(api.sync.snapshot, { deviceId: replacement.deviceId })).nodes.map((n) => n.id),
   ).toEqual(['fresh']);
 });
+
+it('allows upgraded over-byte-limit collections to shrink through deletes and trims', async () => {
+  const { t, deviceId } = await setup();
+  const legacy = Array.from({ length: 220 }, (_, i) => ({
+    ...node,
+    id: `legacy${i}`,
+    title: '界'.repeat(1000),
+  }));
+  expect(JSON.stringify(legacy).length).toBeLessThan(600_000);
+  expect(new TextEncoder().encode(JSON.stringify(legacy)).byteLength).toBeGreaterThan(600_000);
+  await t.run(async (ctx) => {
+    const device = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(device.collectionId, { nodes: legacy });
+  });
+  await expect(
+    t.mutation(api.sync.push, {
+      deviceId,
+      operations: [
+        {
+          id: 'grow',
+          sequence: 1,
+          nodeId: 'extra',
+          kind: 'create',
+          baseRevision: 0,
+          node: { ...node, id: 'extra' },
+        },
+      ],
+    }),
+  ).rejects.toThrow('600 KB');
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      {
+        id: 'trim',
+        sequence: 1,
+        nodeId: 'legacy0',
+        kind: 'update',
+        baseRevision: 0,
+        fields: { title: 'trimmed' },
+      },
+    ],
+  });
+  const trimmed = await t.query(api.sync.snapshot, { deviceId });
+  expect(trimmed.nodes[0].title).toBe('trimmed');
+  expect(new TextEncoder().encode(JSON.stringify(trimmed.nodes)).byteLength).toBeGreaterThan(
+    600_000,
+  );
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: Array.from({ length: 40 }, (_, i) => ({
+      id: `delete${i}`,
+      sequence: i + 2,
+      nodeId: `legacy${i}`,
+      kind: 'delete' as const,
+      baseRevision: 0,
+    })),
+  });
+  const recovered = await t.query(api.sync.snapshot, { deviceId });
+  expect(recovered.nodes).toHaveLength(180);
+  expect(new TextEncoder().encode(JSON.stringify(recovered.nodes)).byteLength).toBeLessThan(
+    600_000,
+  );
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(40);
+});
+
+it('rejects a distinct operation reusing a sequence while a receipt exists', async () => {
+  const { t, deviceId } = await setup();
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      {
+        id: 'accepted',
+        sequence: 1,
+        nodeId: 'a',
+        kind: 'update',
+        baseRevision: 1,
+        fields: { title: 'Accepted' },
+      },
+    ],
+  });
+  await expect(
+    t.mutation(api.sync.push, {
+      deviceId,
+      operations: [
+        {
+          id: 'different',
+          sequence: 1,
+          nodeId: 'a',
+          kind: 'delete',
+          baseRevision: 1,
+        },
+      ],
+    }),
+  ).rejects.toThrow('reused a sync sequence');
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes[0].title).toBe('Accepted');
+});

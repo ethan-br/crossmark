@@ -81,6 +81,7 @@ export default defineSchema({
     attempted: v.optional(node),
   })
     .index('by_operation', ['deviceId', 'operationId'])
+    .index('by_sequence', ['deviceId', 'sequence'])
     .index('by_node', ['collectionId', 'nodeId', 'revision'])
     .index('by_collection', ['collectionId', 'revision'])
     .index('by_at', ['at']),
