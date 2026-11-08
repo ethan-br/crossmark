@@ -1,6 +1,6 @@
 # Crossmark v0
 
-Native desktop bookmark synchronization through Convex, with a WXT-based Chromium/Firefox extension and email/password login through Convex Better Auth. Sync runs in the extension background.
+Keep your bookmarks in sync across desktop browsers with the Crossmark extension for Chromium and Firefox. Sign in with an email and password. Crossmark syncs while your browsers are running.
 
 ## Build and install
 
@@ -59,9 +59,16 @@ WXT opens the extension in a disposable browser profile and reloads it as files 
 
 Login uses an email and password stored by Better Auth in Convex. The backend needs `BETTER_AUTH_SECRET` and `AUTH_TRUSTED_ORIGINS` (the extension origins); follow [the setup guide](docs/auth-setup.md). Do not put backend secrets in a `VITE_` or `WXT_` variable or extension file.
 
-Create an account in the first browser, then sign in with the same email and password in each other browser. The first installation initializes the account’s collection from its native bookmarks. When connecting to an existing collection, explicitly choose to replace this browser with the account collection or replace the account collection with this browser’s bookmarks. The latter updates every connected browser. Crossmark keeps the original local tree for **Disconnect and restore**, which removes the browser from sync before restoring its pre-Crossmark bookmarks. Reconnecting requires the same collection choice again. Ordinary bookmark edits still sync normally. Signing out alone leaves current bookmarks in place. See [the connection and recovery procedure](docs/bookmark-recovery.md).
+Create an account in the first browser, then sign in with the same email and password in each other browser. A new account starts with its first browser’s bookmarks. When connecting to an existing account, choose which bookmarks to keep:
 
-Use one Crossmark installation per independently native-synced collection. Connecting installations already exchanging bookmarks through a browser vendor's sync can introduce duplicates.
+- **Use synced bookmarks:** replace this browser’s bookmarks with the account’s synced bookmarks.
+- **Use this browser’s bookmarks:** replace the account’s synced bookmarks with this browser’s bookmarks. This also replaces bookmarks on all other connected browsers.
+
+There is no merge option. Individual bookmark edits sync normally after connecting.
+
+Crossmark keeps this browser’s original bookmarks from before its first connection, even across reconnects and account changes. **Disconnect and restore** removes this browser from sync before restoring those original bookmarks. It stays disconnected until you sign in and choose which bookmarks to keep again. Signing out alone leaves current bookmarks in place. See [connecting and restoring bookmarks](docs/bookmark-recovery.md) for retry, cancellation and recovery limits.
+
+Avoid connecting two browsers that already sync bookmarks with each other through Chrome, Firefox or another browser’s own sync service: this can create duplicates.
 
 ## Included
 

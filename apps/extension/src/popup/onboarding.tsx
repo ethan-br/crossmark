@@ -83,7 +83,7 @@ function Welcome({
           <span className="text-primary">in every browser.</span>
         </h1>
         <p className="text-sm text-muted-foreground">
-          Sync native bookmarks between your desktop browsers.
+          Keep your bookmarks in sync between your desktop browsers.
         </p>
       </div>
     </Screen>
@@ -188,8 +188,8 @@ function ConfirmSync({
               ? 'Syncing…'
               : replaces
                 ? choice === 'local'
-                  ? 'Replace account and sync'
-                  : 'Replace local and sync'
+                  ? 'Replace account bookmarks'
+                  : 'Replace this browser’s bookmarks'
                 : 'Start syncing'}
           </Button>
           <Button
@@ -211,8 +211,8 @@ function ConfirmSync({
         </h2>
         <p className="text-sm text-muted-foreground">
           {replaces
-            ? `${state.account?.email} already has synced bookmarks. Choose which collection to keep.`
-            : `This browser’s bookmarks become the collection for ${state.account?.email}.`}
+            ? `${state.account?.email} already has synced bookmarks. Choose which bookmarks to keep. The two sets will not be combined.`
+            : `This browser’s bookmarks become the synced bookmarks for ${state.account?.email}.`}
         </p>
       </div>
       <Stats bookmarks={stats.bookmarks} folders={stats.folders}>
@@ -221,7 +221,7 @@ function ConfirmSync({
       {replaces && (
         <>
           <fieldset className="flex flex-col gap-3" disabled={busy || state.registrationPending}>
-            <legend className="mb-2 text-sm font-medium">Connection choice</legend>
+            <legend className="mb-2 text-sm font-medium">Bookmarks to keep</legend>
             <label className="flex items-start gap-2 rounded border p-3 text-sm">
               <input
                 type="radio"
@@ -236,8 +236,8 @@ function ConfirmSync({
               <span>
                 Use synced bookmarks
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  Overwrite this browser with the account collection. The original pre-Crossmark
-                  bookmarks are kept for disconnect and restore.
+                  Replace this browser’s bookmarks with the account’s synced bookmarks. Your
+                  original pre-Crossmark bookmarks stay saved for Disconnect and restore.
                 </span>
               </span>
             </label>
@@ -255,8 +255,8 @@ function ConfirmSync({
               <span>
                 Use this browser’s bookmarks
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  Overwrite the account collection. This replaces bookmarks on every connected
-                  browser. A server recovery snapshot is saved first.
+                  Replace the account’s synced bookmarks with this browser’s bookmarks. This also
+                  replaces bookmarks on all other connected browsers.
                 </span>
               </span>
             </label>
@@ -274,6 +274,13 @@ function ConfirmSync({
             </label>
           )}
         </>
+      )}
+      {state.registrationPending && !busy && (
+        <p className="text-xs text-muted-foreground">
+          Crossmark could not confirm whether connecting finished. Retry with the same bookmarks
+          selected, or Cancel to choose again. Cancel needs a connection to the Crossmark server and
+          does not undo bookmarks already replaced in the account.
+        </p>
       )}
       <Field
         id="browser-name"
@@ -314,7 +321,7 @@ export function Onboarding({
       <Screen
         actions={
           <Button disabled={busy} onClick={() => void act({ type: 'restore', confirmed: true })}>
-            Retry restoration
+            Retry restore
           </Button>
         }
       >

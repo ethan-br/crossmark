@@ -23,7 +23,7 @@ interface StoredSession {
 }
 const signInRequired = 'Sign in to continue.';
 const outdatedBackend = (site: string) =>
-  `The backend at ${site} does not support email/password login. Deploy the current Convex functions to it.`;
+  `The Crossmark server at ${site} needs an update before you can sign in. Ask the person who runs it to update Crossmark.`;
 const messages: Record<string, string | ((site: string) => string)> = {
   INVALID_EMAIL_OR_PASSWORD: 'Invalid email or password.',
   USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
@@ -58,12 +58,14 @@ export class PasswordSession implements SessionAuth {
         signal: AbortSignal.timeout(30000),
       });
     } catch {
-      throw new Error(`Could not reach the Crossmark backend at ${this.siteURL}.`);
+      throw new Error(
+        `Could not reach the Crossmark server at ${this.siteURL}. Check your connection and try again.`,
+      );
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok && data.code === 'INVALID_ORIGIN') {
       throw new Error(
-        `Login configuration is incomplete on ${this.siteURL}. Add ${browser.runtime.getURL('').replace(/\/$/, '')} to AUTH_TRUSTED_ORIGINS.`,
+        `The Crossmark server at ${this.siteURL} has not allowed sign-in from this browser. Ask the person who runs it to allow ${browser.runtime.getURL('').replace(/\/$/, '')} in AUTH_TRUSTED_ORIGINS.`,
       );
     }
     if (response.ok) return { data, response };
@@ -85,7 +87,7 @@ export class PasswordSession implements SessionAuth {
       ? await this.request('/sign-up/email', { email, password, name: email.split('@')[0] })
       : await this.request('/sign-in/email', { email, password });
     const token = response.headers.get('set-auth-token') ?? data.token;
-    if (!token) throw new Error('Sign-in did not create a session.');
+    if (!token) throw new Error('Crossmark could not finish signing you in. Try signing in again.');
     await browser.storage.local.set({ authSession: { token } });
     this.jwt = undefined;
     const client = new ConvexHttpClient(this.convexURL);

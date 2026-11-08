@@ -85,7 +85,7 @@ export class Engine {
         if (command.confirmed !== true) throw new Error('Confirm disconnect and restore first.');
         if (!state.restorePending) {
           if (state.joinRecovery === undefined)
-            throw new Error('No pre-Crossmark snapshot is saved.');
+            throw new Error('No original bookmarks are saved in this copy of Crossmark.');
           if (state.registrationPending) throw new Error('Finish connecting before restoring.');
           await this.adapter.recover(state, this.store);
           state.backup = await this.adapter.read(state);
@@ -128,7 +128,7 @@ export class Engine {
           state.needsSignIn = true;
           await this.save(state);
           throw new Error(
-            `Sign in as ${state.account.email}, or sign out of this installation before using a different account.`,
+            `Sign in as ${state.account.email}, or sign out of Crossmark in this browser before using a different account.`,
           );
         }
         if (state.installedAccountId && state.installedAccountId !== account.id) {
@@ -170,7 +170,9 @@ export class Engine {
           state.connectionChoice &&
           state.connectionChoice !== command.choice
         )
-          throw new Error('Retry the original connection choice before choosing another.');
+          throw new Error(
+            'Retry with the same bookmarks selected, or Cancel before choosing different bookmarks.',
+          );
         // Preserve the first pre-Crossmark tree, including an empty tree.
         state.joinRecovery ??= structuredClone(local);
         if (!state.registrationPending && command.choice === 'local') {
@@ -546,7 +548,7 @@ export class Engine {
               .replace(/\[Request ID:[^\]]*\]\s*/g, '')
               .replace(/Uncaught (?:ConvexError|Error): /, '')
               .split('\n')[0]
-          : 'Could not synchronize. Try again.';
+          : 'Could not sync bookmarks. Try again.';
       await this.save(state);
     }
   }

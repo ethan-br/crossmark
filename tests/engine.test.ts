@@ -1457,7 +1457,7 @@ describe('explicit connection choice and detached restoration', () => {
     await ready(a);
     await expect(
       c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Laptop' }),
-    ).rejects.toThrow('original connection choice');
+    ).rejects.toThrow('same bookmarks selected');
     await c.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Laptop' });
     expect((await ready(c)).baseline.some((n) => n.url === 'https://after.example')).toBe(true);
     const backups = await t.run((ctx) => ctx.db.query('backups').collect());
