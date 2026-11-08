@@ -35,9 +35,8 @@ separate from server retention.
 The permanent fence table grows with the number of distinct deleted identities,
 but stores no bookmark titles or URLs. Devices and their sequence receipts also
 remain stored, including revoked devices. Removing either independently would
-weaken replay protection. Account deletion must delete `retiredNodes` along with
-all other collection data; any explicit table list in account lifecycle work
-must include it. The operator clear-all implementation enumerates schema tables.
+weaken replay protection. Account deletion deletes `retiredNodes` along with all other collection data.
+Any future explicit table list in account lifecycle work must include it. The operator clear-all implementation enumerates schema tables.
 
 Deploy schema/index changes and the cron with the backend. No production data
 mutation or deployment is performed by this change. Rollback must preserve the

@@ -14,6 +14,9 @@ export interface Credentials {
 }
 export interface SessionAuth {
   signIn(credentials: Credentials): Promise<Account>;
+  requestReset?(email: string): Promise<void>;
+  resetPassword?(token: string, password: string): Promise<void>;
+  deleteAccount?(password: string): Promise<void>;
   token(): Promise<string>;
   signOut(): Promise<void>;
 }
@@ -30,8 +33,10 @@ const messages: Record<string, string | ((site: string) => string)> = {
     'An account with this email already exists. Sign in instead.',
   EMAIL_PASSWORD_DISABLED: outdatedBackend,
   EMAIL_PASSWORD_SIGN_UP_DISABLED: outdatedBackend,
+  RESET_PASSWORD_DISABLED:
+    'Password reset is not configured. Ask the person who runs Crossmark to enable reset email.',
   404: outdatedBackend,
-  429: 'Too many attempts. Sign-in allows 10 every 5 minutes; creating an account allows 5 an hour.',
+  429: 'Too many attempts. Wait before trying again.',
 };
 export class PasswordSession implements SessionAuth {
   private jwt?: { value: string; expiresAt: number };
@@ -70,11 +75,18 @@ export class PasswordSession implements SessionAuth {
     }
     if (response.ok) return { data, response };
     if (response.status === 401 && token) throw new Error(signInRequired);
-    const message = messages[data.code] ?? messages[response.status];
+    const message =
+      (path === '/reset-password' && data.code === 'INVALID_TOKEN'
+        ? 'That reset code is invalid or has expired. Request a new one.'
+        : undefined) ??
+      messages[data.code] ??
+      (response.status === 404 && !['/sign-in/email', '/sign-up/email'].includes(path)
+        ? 'The Crossmark server needs an update to support this action.'
+        : messages[response.status]);
     throw new Error(
       typeof message === 'function'
         ? message(this.siteURL)
-        : (message ?? data.message ?? 'Sign-in failed.'),
+        : (message ?? data.message ?? 'Could not complete this action. Try again.'),
     );
   }
   signIn(credentials: Credentials): Promise<Account> {
@@ -117,6 +129,21 @@ export class PasswordSession implements SessionAuth {
       await browser.storage.local.set({ authSession: { ...session, token: replacement } });
     this.jwt = { value: data.token, expiresAt: Date.now() + 10 * 60_000 };
     return data.token as string;
+  }
+  async requestReset(email: string) {
+    await this.request('/request-password-reset', { email: email.trim() });
+  }
+  async resetPassword(token: string, newPassword: string) {
+    await this.request('/reset-password', { token: token.trim(), newPassword });
+    this.jwt = undefined;
+    await browser.storage.local.remove(['authSession', 'googleSession']);
+  }
+  async deleteAccount(password: string) {
+    const session = await this.stored();
+    if (!session?.token) throw new Error(signInRequired);
+    await this.request('/delete-user', { password }, session.token);
+    this.jwt = undefined;
+    await browser.storage.local.remove(['authSession', 'googleSession']);
   }
   signOut() {
     return debug.trace('auth.signOut', () => this.signOutImpl());

@@ -1,6 +1,6 @@
 # Login setup
 
-Crossmark uses Better Auth email/password login on the Convex backend. There is no social provider, email code or manual device enrollment flow. Email verification and self-service password reset are not enabled in this version; the operator can [set a password](#setting-or-resetting-a-password).
+Crossmark uses Better Auth email/password login on the Convex backend. There is no social provider, email code or manual device enrollment flow. Email verification is not enabled. Self-service password reset requires the email configuration below; the operator can also [set a password](#setting-or-resetting-a-password).
 
 ## 1. Choose the backend
 
@@ -52,7 +52,7 @@ Reload the extension, open it, choose **Create an account**, enter an email, a p
 
 ## Setting or resetting a password
 
-Accounts created with the earlier Google login have no password, and there is no self-service reset. The deployment operator can set one. Read the password without echoing it so it stays out of the shell history and out of `ps` output:
+Accounts created with the earlier Google login have no password. They can use self-service reset once email delivery is configured, or the deployment operator can set one. Read the password without echoing it so it stays out of the shell history and out of `ps` output:
 
 ```bash
 read -rs -p 'New password: ' PASSWORD && echo
@@ -109,3 +109,15 @@ npm run sign:firefox
 ```
 
 The signed XPI is placed in `dist/signed/` and copied to `dist/crossmark-firefox-signed.xpi`. `web-ext sign` uses Mozilla's Add-ons signing API; “locally” means the command and credentials stay on your machine, while Mozilla performs the actual signature. This project uses the `unlisted` channel for private testing. Do not commit the credentials or put them in `.env`, `VITE_` or `WXT_` variables or extension files.
+
+## Self-service reset and account deletion
+
+Configure backend-only `RESEND_API_KEY` and `AUTH_EMAIL_FROM` (for example `Crossmark <accounts@your-verified-domain.example>`) in Convex. Verify the sending domain in Resend and enable production delivery to recipients. Never put these secrets in extension variables. Until both are set, reset requests fail with `RESET_PASSWORD_DISABLED`; operator reset remains available. Provider credentials, domain verification and a real delivery check are external release blockers; automated tests mock delivery and send no email.
+
+Choose **Forgot password?** on sign-in, enter the account email, then paste the emailed code and enter a new 8–128 character password. Codes expire after 30 minutes and work once. Successful reset ends all sessions; sign in again on every browser. Unknown email addresses receive the same success response without an email. Reset requests allow five attempts per hour per IP, and submissions ten per five minutes. Email ownership grants recovery access even for legacy password-less accounts; email addresses remain unverified at signup.
+
+In Settings, enter the current password, choose **Delete account**, and confirm permanent deletion. Better Auth checks the password and removes the account and sessions. A component deletion trigger removes that user's collections, devices, operation history and backups in the same transaction as user deletion. Native bookmarks remain on all browsers; the requesting browser clears its connection and local recovery state. Other browsers retain their local copies and ask for sign-in when their sessions fail. Export before deletion if needed.
+
+Deletion currently uses one atomic Convex transaction. Accounts whose history exceeds transaction read/write limits require an operator-assisted, account-scoped purge or a future resumable deletion job; deletion rolls back on a limit failure. Capacity validation is required before claiming support for arbitrarily large accounts. Deployment backups, operator exports and already exported diagnostics follow their separate retention policies and are not erased by this flow. Ownerless legacy collections cannot be attributed to an account and are not removed.
+
+When upgrading Better Auth or its Convex adapter, rerun `tests/auth-routes.test.ts`: deletion depends on adapter `user.onDelete` triggers, password checking, session revocation and reset verification behavior. Removed component tables in adapter upgrades require a separate migration/retention decision.

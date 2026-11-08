@@ -61,7 +61,9 @@ export default defineSchema({
   retiredNodes: defineTable({
     collectionId: v.id('collections'),
     nodeId: v.string(),
-  }).index('by_node', ['collectionId', 'nodeId']),
+  })
+    .index('by_node', ['collectionId', 'nodeId'])
+    .index('by_collection', ['collectionId']),
   operations: defineTable({
     collectionId: v.id('collections'),
     deviceId: v.id('devices'),
