@@ -11,6 +11,9 @@ export interface State {
   account?: Account;
   installationId: string;
   registrationPending?: boolean;
+  connectionChoice?: 'remote' | 'local';
+  /** Durable, detached restore job; no sync may run while present. */
+  restorePending?: { nodes: Node[] };
   needsSignIn?: boolean;
   deviceId?: string;
   name: string;
@@ -38,7 +41,7 @@ export interface State {
   // Legacy merge state is cleared after replacement finishes.
   joinLocal?: Node[];
   joinAliases?: Record<string, string>;
-  /** First local tree replaced by a cloud collection; survives disconnect. */
+  /** Original pre-Crossmark tree; survives disconnect, reconnect and account changes. */
   joinRecovery?: Node[];
   initialized: boolean;
   safetyApproved: boolean;

@@ -1,6 +1,7 @@
 import { authenticatedBackend } from './fixtures/auth';
 import { describe, it, expect, vi } from 'vitest';
 import { api } from '../convex/_generated/api';
+import type { Id } from '../convex/_generated/dataModel';
 import { Engine } from '../apps/extension/src/engine';
 import { Adapter } from '../apps/extension/src/adapter';
 import { MemoryBookmarks } from './fixtures/bookmarks';
@@ -8,7 +9,7 @@ import { initialState, type State, type Store } from '../apps/extension/src/stat
 import type { ConvexHttpClient } from 'convex/browser';
 const credentials = { email: 'test@example.com', password: 'password1234' };
 async function setup() {
-  const { t, auth } = await authenticatedBackend();
+  const { t, auth, account } = await authenticatedBackend();
   function device(name: string, browser = 'Chromium') {
     let stored: State = { ...initialState(), name, browser };
     const store: Store = {
@@ -35,15 +36,15 @@ async function setup() {
     const engine = new Engine(store, adapter, 'http://127.0.0.1:3210', undefined, transport, auth);
     return { native, store, engine, adapter, transport, auth };
   }
-  return { t, device };
+  return { t, device, account };
 }
 async function connectPair() {
   const env = await setup();
   const a = env.device('First');
   const b = env.device('Second');
   await a.native.create({ title: 'First bookmark', url: 'https://one.example', parentId: '1' });
-  await a.engine.command({ type: 'connect', credentials, name: 'First' });
-  await b.engine.command({ type: 'connect', credentials, name: 'Second' });
+  await a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'First' });
+  await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Second' });
   return { ...env, a, b };
 }
 async function ready(d: ReturnType<Awaited<ReturnType<typeof setup>>['device']>) {
@@ -73,7 +74,7 @@ describe('two-browser synchronization and recovery', () => {
       title: 'Cloud title',
       url: 'https://shared.example',
     });
-    await a.engine.command({ type: 'connect', credentials, name: 'First' });
+    await a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'First' });
     const original = (await a.store.read()).snapshot!;
     const local = await b.native.create({
       parentId: bRoot,
@@ -94,7 +95,7 @@ describe('two-browser synchronization and recovery', () => {
       title: 'Policy',
       url: 'https://policy.example',
     });
-    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Second' });
     const installed = await ready(b);
     expect(installed.snapshot!.nodes).toEqual(original.nodes);
     expect(installed.snapshot!.revision).toBe(original.revision);
@@ -117,7 +118,7 @@ describe('two-browser synchronization and recovery', () => {
     });
     const create = vi.spyOn(b.native, 'create');
     const remove = vi.spyOn(b.native, 'remove');
-    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Second' });
     expect((await ready(b)).snapshot!.nodes).toEqual(original.nodes);
     expect(b.native.nodes.some((n) => n.url === 'https://new-local.example')).toBe(false);
     expect(b.native.nodes.find((n) => n.url === 'https://shared.example')?.id).toBe(installedId);
@@ -134,7 +135,7 @@ describe('two-browser synchronization and recovery', () => {
     const update = vi.spyOn(b.native, 'update');
     const move = vi.spyOn(b.native, 'move');
     const remove = vi.spyOn(b.native, 'remove');
-    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Second' });
     expect((await ready(b)).status).toBe('ready');
     expect(b.native.nodes.find((n) => n.url === 'https://one.example')?.id).toBe(id);
     for (const write of [create, update, move, remove]) expect(write).not.toHaveBeenCalled();
@@ -148,7 +149,7 @@ describe('two-browser synchronization and recovery', () => {
       title: 'Before joining',
       url: 'https://original.example',
     });
-    await b.engine.command({ type: 'connect', credentials, name: 'Joining' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Joining' });
     const recovery = (await b.engine.command({ type: 'export' })) as {
       joinRecovery: { url?: string }[];
     };
@@ -171,7 +172,12 @@ describe('two-browser synchronization and recovery', () => {
     expect(((await b.engine.command({ type: 'export' })) as typeof recovery).joinRecovery).toEqual(
       recovery.joinRecovery,
     );
-    await b.engine.command({ type: 'connect', credentials, name: 'Joining again' });
+    await b.engine.command({
+      type: 'connect',
+      choice: 'remote',
+      credentials,
+      name: 'Joining again',
+    });
     expect((await ready(b)).status).toBe('ready');
     expect(((await b.engine.command({ type: 'export' })) as typeof recovery).joinRecovery).toEqual(
       recovery.joinRecovery,
@@ -182,10 +188,20 @@ describe('two-browser synchronization and recovery', () => {
     const { device } = await setup();
     const first = device('Empty first');
     const second = device('Populated second');
-    await first.engine.command({ type: 'connect', credentials, name: 'Empty first' });
+    await first.engine.command({
+      type: 'connect',
+      choice: 'remote',
+      credentials,
+      name: 'Empty first',
+    });
     await second.native.create({ parentId: '1', title: 'Toolbar', url: 'https://one.example' });
     await second.native.create({ parentId: '2', title: 'Other', url: 'https://two.example' });
-    await second.engine.command({ type: 'connect', credentials, name: 'Populated second' });
+    await second.engine.command({
+      type: 'connect',
+      choice: 'remote',
+      credentials,
+      name: 'Populated second',
+    });
     expect((await ready(second)).snapshot?.nodes).toEqual([]);
     expect(second.native.nodes.filter((n) => n.url)).toEqual([]);
     const exported = (await second.engine.command({ type: 'export' })) as {
@@ -211,7 +227,7 @@ describe('two-browser synchronization and recovery', () => {
     expect((await b.store.read()).installedAccountId).toBe(before.account?.id);
     const create = vi.spyOn(b.native, 'create');
     const remove = vi.spyOn(b.native, 'remove');
-    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Second' });
     expect((await ready(b)).status).toBe('ready');
     expect(b.native.nodes.find((n) => n.url === 'https://one.example')?.id).toBe(id);
     expect(create).not.toHaveBeenCalled();
@@ -228,7 +244,7 @@ describe('two-browser synchronization and recovery', () => {
     const create = vi.spyOn(b.native, 'create');
     const update = vi.spyOn(b.native, 'update');
     const remove = vi.spyOn(b.native, 'remove');
-    await b.engine.command({ type: 'connect', credentials, name: 'Second' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Second' });
     expect((await ready(b)).status).toBe('ready');
     expect(b.native.nodes.find((n) => n.url === before.url)?.id).toBe(before.id);
     expect(b.native.nodes.find((n) => n.id === before.id)?.title).toBe('Changed while signed out');
@@ -242,10 +258,10 @@ describe('two-browser synchronization and recovery', () => {
     const a = device('A'),
       b = device('B'),
       c = device('C');
-    await a.engine.command({ type: 'connect', credentials, name: 'A' });
+    await a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'A' });
     for (const d of [b, c]) {
       await d.native.create({ parentId: '1', title: 'Local', url: 'https://new.example' });
-      await d.engine.command({ type: 'connect', credentials, name: 'Joining' });
+      await d.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Joining' });
     }
     for (const d of [a, b, c]) {
       expect((await ready(d)).snapshot!.nodes).toHaveLength(0);
@@ -258,7 +274,7 @@ describe('two-browser synchronization and recovery', () => {
     const a = device('Chrome', 'Chrome');
     const b = device('Firefox', 'Firefox');
     await a.native.create({ parentId: '1', title: 'Cloud', url: 'https://cloud.example' });
-    await a.engine.command({ type: 'connect', credentials, name: 'Chrome' });
+    await a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Chrome' });
     await b.native.create({
       parentId: 'menu________',
       title: 'Menu local',
@@ -274,7 +290,7 @@ describe('two-browser synchronization and recovery', () => {
       title: 'Mobile local',
       url: 'https://mobile-local.example',
     });
-    await b.engine.command({ type: 'connect', credentials, name: 'Firefox' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Firefox' });
     expect((await ready(b)).snapshot!.nodes).toHaveLength(1);
     expect(
       b.native.nodes
@@ -297,16 +313,16 @@ describe('two-browser synchronization and recovery', () => {
         title: `Cloud ${i}`,
         url: 'https://same.example',
       });
-    await a.engine.command({ type: 'connect', credentials, name: 'Firefox' });
+    await a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Firefox' });
     for (let i = 0; i < 3; i++)
       await b.native.create({ parentId: '1', title: 'Overlap', url: 'https://same.example' });
     const original = (await a.store.read()).snapshot!;
-    await b.engine.command({ type: 'connect', credentials, name: 'Chrome' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Chrome' });
     expect((await ready(b)).snapshot!.nodes).toEqual(original.nodes);
     expect(b.native.nodes.filter((n) => n.url)).toHaveLength(2);
     expect(b.native.nodes.filter((n) => n.type === 'separator')).toHaveLength(0);
     await b.engine.command({ type: 'disconnect' });
-    await b.engine.command({ type: 'connect', credentials, name: 'Chrome' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Chrome' });
     expect((await ready(b)).snapshot!.nodes).toEqual(original.nodes);
     expect(b.native.nodes.filter((n) => n.title === 'Bookmarks Menu')).toHaveLength(1);
     expect((await ready(a)).snapshot!.revision).toBe(original.revision);
@@ -325,7 +341,12 @@ describe('two-browser synchronization and recovery', () => {
       title: 'Menu item',
       url: 'https://menu.example',
     });
-    await firefox.engine.command({ type: 'connect', credentials, name: 'Firefox' });
+    await firefox.engine.command({
+      type: 'connect',
+      choice: 'remote',
+      credentials,
+      name: 'Firefox',
+    });
     const chrome = device('Chrome', 'Chrome');
     chrome.native.nodes = [
       { id: '1', title: 'Local toolbar', folderType: 'bookmarks-bar', syncing: false },
@@ -339,7 +360,7 @@ describe('two-browser synchronization and recovery', () => {
       title: 'Local only',
       url: 'https://local.example',
     });
-    await chrome.engine.command({ type: 'connect', credentials, name: 'Chrome' });
+    await chrome.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Chrome' });
     let state = await ready(chrome);
     expect(state.roots).toMatchObject({ toolbar: '5', other: '6' });
     expect(chrome.native.nodes.find((n) => n.url === 'https://toolbar.example')?.parentId).toBe(
@@ -369,12 +390,12 @@ describe('two-browser synchronization and recovery', () => {
     const first = device('First');
     const second = device('Second');
     await first.native.create({ parentId: '1', title: 'Cloud', url: 'https://cloud.example' });
-    await first.engine.command({ type: 'connect', credentials, name: 'First' });
+    await first.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'First' });
     for (const root of second.native.nodes) {
       root.folderType = root.id === '1' ? 'bookmarks-bar' : 'other';
       root.syncing = false;
     }
-    await second.engine.command({ type: 'connect', credentials, name: 'Second' });
+    await second.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Second' });
     const installed = second.native.nodes.find((n) => n.url === 'https://cloud.example')!;
     second.native.nodes.push(
       { id: '5', title: 'Account toolbar', folderType: 'bookmarks-bar', syncing: true },
@@ -391,7 +412,7 @@ describe('two-browser synchronization and recovery', () => {
     await second.engine.command({ type: 'state' });
     const create = vi.spyOn(second.native, 'create');
     const remove = vi.spyOn(second.native, 'remove');
-    await second.engine.command({ type: 'connect', credentials, name: 'Second' });
+    await second.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Second' });
     expect((await ready(second)).roots).toMatchObject({ toolbar: '1', other: '2' });
     expect(second.native.nodes.find((n) => n.url === 'https://cloud.example')?.id).toBe(
       installed.id,
@@ -409,7 +430,12 @@ describe('two-browser synchronization and recovery', () => {
       title: 'Portable',
       url: 'https://portable.example',
     });
-    await firefox.engine.command({ type: 'connect', credentials, name: 'Firefox' });
+    await firefox.engine.command({
+      type: 'connect',
+      choice: 'remote',
+      credentials,
+      name: 'Firefox',
+    });
     const id = (await firefox.store.read()).deviceId as never;
     await t.mutation(api.sync.push, {
       deviceId: id,
@@ -448,7 +474,7 @@ describe('two-browser synchronization and recovery', () => {
       ],
     });
     const chrome = device('Chrome', 'Chrome');
-    await chrome.engine.command({ type: 'connect', credentials, name: 'Chrome' });
+    await chrome.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Chrome' });
     const state = await ready(chrome);
     expect(state.snapshot!.nodes).toHaveLength(3);
     expect(chrome.native.nodes.filter((n) => n.url).map((n) => n.url)).toEqual([
@@ -460,7 +486,7 @@ describe('two-browser synchronization and recovery', () => {
   it('keeps legacy cloud mobile nodes while replacing a joining portable bookmark', async () => {
     const { t, device } = await setup();
     const source = device('Source');
-    await source.engine.command({ type: 'connect', credentials, name: 'Source' });
+    await source.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Source' });
     await t.mutation(api.sync.push, {
       deviceId: (await source.store.read()).deviceId as never,
       operations: [
@@ -503,7 +529,12 @@ describe('two-browser synchronization and recovery', () => {
       title: 'Local toolbar link',
       url: 'https://phone.example',
     });
-    await joining.engine.command({ type: 'connect', credentials, name: 'Joining' });
+    await joining.engine.command({
+      type: 'connect',
+      choice: 'remote',
+      credentials,
+      name: 'Joining',
+    });
     const state = await ready(joining);
     expect(joining.native.nodes.find((n) => n.id === local.id)).toBeUndefined();
     expect(state.snapshot!.nodes.filter((n) => n.url === 'https://phone.example')).toHaveLength(1);
@@ -514,7 +545,7 @@ describe('two-browser synchronization and recovery', () => {
   it('upgrades a persisted mobile baseline without deleting its cloud or native subtree', async () => {
     const { t, device } = await setup();
     const chrome = device('Legacy');
-    await chrome.engine.command({ type: 'connect', credentials, name: 'Legacy' });
+    await chrome.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Legacy' });
     const wrapper = await chrome.native.create({ parentId: '2', title: 'Mobile Bookmarks' });
     const folder = await chrome.native.create({ parentId: wrapper.id, title: 'Phone' });
     const link = await chrome.native.create({
@@ -585,7 +616,7 @@ describe('two-browser synchronization and recovery', () => {
         url: `https://local.example/${i}`,
       });
     }
-    await b.engine.command({ type: 'connect', credentials, name: 'Joining' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Joining' });
     expect((await ready(b)).snapshot!.nodes).toHaveLength(1);
     expect(b.native.nodes.filter((n) => n.title === 'Work')).toHaveLength(0);
     expect(b.native.nodes.filter((n) => n.url)).toHaveLength(1);
@@ -605,7 +636,7 @@ describe('two-browser synchronization and recovery', () => {
         throw new Error('Interrupted removal');
       }
     };
-    await b.engine.command({ type: 'connect', credentials, name: 'Joining' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Joining' });
     expect((await b.store.read()).journal?.kind).toBe('delete');
     const restarted = new Engine(
       b.store,
@@ -635,7 +666,7 @@ describe('two-browser synchronization and recovery', () => {
       }
       return created;
     };
-    await b.engine.command({ type: 'connect', credentials, name: 'Joining' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Joining' });
     expect((await b.store.read()).journal?.kind).toBe('create');
     expect((await b.store.read()).joinWiped).toBe(true);
     const firstNative = b.native.nodes.find((n) => n.url === 'https://one.example')!.id;
@@ -750,8 +781,8 @@ describe('two-browser synchronization and recovery', () => {
     await a.native.create({ parentId: '1', title: 'Cloud', url: 'https://same.example' });
     await b.native.create({ parentId: '1', title: 'Local', url: 'https://same.example' });
     await b.native.create({ parentId: '2', title: 'Other local', url: 'https://other.example' });
-    await a.engine.command({ type: 'connect', credentials, name: 'A' });
-    await b.engine.command({ type: 'connect', credentials, name: 'B' });
+    await a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'A' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'B' });
     expect((await b.store.read()).status).toBe('ready');
     expect(b.native.nodes.filter((n) => n.url).map((n) => n.title)).toEqual(['Cloud']);
     expect((await ready(a)).snapshot!.nodes).toHaveLength(1);
@@ -881,13 +912,13 @@ describe('safety and partial failure regressions', () => {
     const a = device('A'),
       b = device('B');
     await a.native.create({ parentId: '1', title: 'Cloud', url: 'https://cloud.example' });
-    await a.engine.command({ type: 'connect', credentials, name: 'A' });
+    await a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'A' });
     await b.native.create({ parentId: '1', title: 'Local', url: 'https://local.example' });
     const query = vi
       .spyOn(b.transport, 'query')
       .mockResolvedValueOnce((await a.store.read()).snapshot as never)
       .mockRejectedValueOnce(new TypeError('Offline'));
-    await b.engine.command({ type: 'connect', credentials, name: 'B' });
+    await b.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'B' });
     query.mockRestore();
     await b.engine.command({ type: 'pause' });
     await b.engine.sync();
@@ -901,7 +932,7 @@ describe('safety and partial failure regressions', () => {
     const a = device('A');
     for (let i = 0; i < 25; i++)
       await a.native.create({ parentId: '1', title: `Item ${i}`, url: `https://example.com/${i}` });
-    await a.engine.command({ type: 'connect', credentials, name: 'A' });
+    await a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'A' });
     for (const n of [...a.native.nodes].filter((n) => n.url)) await a.native.remove(n.id);
     await a.engine.sync();
     let s = await a.store.read();
@@ -952,12 +983,12 @@ describe('safety and partial failure regressions', () => {
       }
       return result;
     }) as typeof normal;
-    await expect(a.engine.command({ type: 'connect', credentials, name: 'A' })).rejects.toThrow(
-      'Connection lost',
-    );
+    await expect(
+      a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'A' }),
+    ).rejects.toThrow('Connection lost');
     await a.native.update(item.id, { title: 'After' });
     await a.engine.command({ type: 'state' });
-    await a.engine.command({ type: 'connect', credentials, name: 'A' });
+    await a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'A' });
     expect((await ready(a)).snapshot?.nodes[0].title).toBe('After');
   });
   it('preserves unrelated edits received during remote projection', async () => {
@@ -1185,9 +1216,9 @@ it('rejects changing accounts on an existing installation', async () => {
   const { a } = await connectPair();
   const previous = await a.store.read();
   a.auth.signIn = async () => ({ id: 'different-user', email: 'other@example.com', name: 'Other' });
-  await expect(a.engine.command({ type: 'connect', credentials, name: 'A' })).rejects.toThrow(
-    'Sign in as',
-  );
+  await expect(
+    a.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'A' }),
+  ).rejects.toThrow('Sign in as');
   const state = await a.store.read();
   expect(state.account).toEqual(previous.account);
   expect(state.deviceId).toBe(previous.deviceId);
@@ -1204,7 +1235,7 @@ describe('sign-in before connecting', () => {
     expect(signedIn.collectionExists).toBe(false);
     expect(signedIn.baseline.map((n) => n.title)).toContain('Local');
     expect(await t.run((ctx) => ctx.db.query('devices').collect())).toHaveLength(0);
-    await a.engine.command({ type: 'connect', name: 'First' });
+    await a.engine.command({ type: 'connect', choice: 'remote', name: 'First' });
     const state = await ready(a);
     expect(state.collectionExists).toBeUndefined();
     expect(state.snapshot?.nodes.map((n) => n.title)).toContain('Local');
@@ -1220,7 +1251,7 @@ describe('sign-in before connecting', () => {
     const signedIn = (await c.engine.command({ type: 'signIn', credentials })) as State;
     expect(signedIn.collectionExists).toBe(true);
     expect(c.native.nodes.find((n) => n.id === local.id)).toBeDefined();
-    await c.engine.command({ type: 'connect', name: 'Third' });
+    await c.engine.command({ type: 'connect', choice: 'remote', name: 'Third' });
     await ready(c);
     expect(c.native.nodes.find((n) => n.id === local.id)).toBeUndefined();
     expect(c.native.nodes.some((n) => n.title === 'First bookmark')).toBe(true);
@@ -1279,7 +1310,12 @@ it('records connection, reconciliation, retry and bookmark diagnostics without c
       title: 'Secret bookmark',
       url: 'https://secret.example',
     });
-    await a.engine.command({ type: 'connect', credentials, name: 'Private device' });
+    await a.engine.command({
+      type: 'connect',
+      choice: 'remote',
+      credentials,
+      name: 'Private device',
+    });
     await a.engine.command({ type: 'pause' });
     await a.engine.sync();
     await a.engine.command({ type: 'pause' });
@@ -1312,4 +1348,333 @@ it('records connection, reconciliation, retry and bookmark diagnostics without c
     debug.clear();
     consoleSpy.mockRestore();
   }
+});
+
+describe('explicit connection choice and detached restoration', () => {
+  it('an empty local source explicitly clears the account collection on every browser', async () => {
+    const { a, b, device } = await connectPair();
+    const c = device('Empty source');
+    await c.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Empty source' });
+    expect((await ready(c)).baseline).toEqual([]);
+    expect((await ready(a)).baseline).toEqual([]);
+    expect((await ready(b)).baseline).toEqual([]);
+  });
+
+  it('restoration works while paused and preserves the original snapshot after account switching', async () => {
+    const { a, b, account } = await connectPair();
+    const original = (await a.store.read()).joinRecovery;
+    await a.engine.command({ type: 'pause' });
+    await a.engine.command({ type: 'restore', confirmed: true });
+    expect((await a.store.read()).connected).toBe(false);
+    expect((await ready(b)).baseline).toHaveLength(1);
+    const other = await account('new-account@example.com');
+    a.auth.signIn = other.auth.signIn;
+    a.auth.token = other.auth.token;
+    a.transport.query = other.t.query.bind(other.t) as typeof a.transport.query;
+    a.transport.mutation = other.t.mutation.bind(other.t) as typeof a.transport.mutation;
+    await a.engine.command({
+      type: 'connect',
+      choice: 'local',
+      credentials,
+      name: 'Another account',
+    });
+    expect((await ready(a)).joinRecovery).toEqual(original);
+  });
+
+  async function browserWithOriginals() {
+    const env = await connectPair();
+    const c = env.device('Laptop');
+    const folder = await c.native.create({ parentId: '1', title: 'Before Crossmark' });
+    await c.native.create({
+      parentId: folder.id,
+      title: 'Original',
+      url: 'https://original.example',
+    });
+    return { ...env, c };
+  }
+
+  it('requires a connection choice before registering or changing bookmarks', async () => {
+    const { c } = await browserWithOriginals();
+    const before = structuredClone(c.native.nodes);
+    await expect(
+      c.engine.command({ type: 'connect', name: 'Laptop', credentials } as never),
+    ).rejects.toThrow('Choose');
+    expect(c.native.nodes).toEqual(before);
+    expect((await c.store.read()).connected).toBe(false);
+  });
+
+  it('replaces the account with local data atomically, saves its old tree and keeps ordinary edits syncing', async () => {
+    const { a, b, c, t } = await browserWithOriginals();
+    await c.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Laptop' });
+    const state = await ready(c);
+    expect(state.baseline.map((n) => n.title).sort()).toEqual(['Before Crossmark', 'Original']);
+    expect((await ready(a)).baseline).toEqual(state.baseline);
+    expect((await ready(b)).baseline).toEqual(state.baseline);
+    const backups = await t.run((ctx) => ctx.db.query('backups').collect());
+    expect(
+      backups
+        .find((x) => x.reason === 'Before replacing account bookmarks')
+        ?.nodes.some((n) => n.url === 'https://one.example'),
+    ).toBe(true);
+    const id = state.mappings[state.baseline.find((n) => n.url)!.id];
+    await c.native.update(id, { title: 'Edited normally' });
+    await ready(c);
+    expect((await ready(a)).baseline.some((n) => n.title === 'Edited normally')).toBe(true);
+    const added = await a.native.create({
+      parentId: '1',
+      title: 'New',
+      url: 'https://new.example',
+    });
+    await ready(a);
+    await ready(c);
+    expect((await c.store.read()).baseline.some((n) => n.url === added.url)).toBe(true);
+    await c.native.remove(id);
+    await ready(c);
+    expect((await ready(a)).baseline.some((n) => n.title === 'Edited normally')).toBe(false);
+  });
+
+  it('does not repeat account replacement after a lost registration acknowledgement', async () => {
+    const { a, c, t } = await browserWithOriginals();
+    const mutation = c.transport.mutation.bind(c.transport);
+    let lost = false;
+    c.transport.mutation = (async (...args: Parameters<typeof mutation>) => {
+      const value = await mutation(args[0], args[1]);
+      if (!lost) {
+        lost = true;
+        throw new TypeError('Lost acknowledgement');
+      }
+      return value;
+    }) as typeof mutation;
+    await expect(
+      c.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Laptop' }),
+    ).rejects.toThrow('Lost acknowledgement');
+    await ready(a);
+    await a.native.create({
+      parentId: '1',
+      title: 'After replacement',
+      url: 'https://after.example',
+    });
+    await ready(a);
+    await expect(
+      c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Laptop' }),
+    ).rejects.toThrow('original connection choice');
+    await c.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Laptop' });
+    expect((await ready(c)).baseline.some((n) => n.url === 'https://after.example')).toBe(true);
+    const backups = await t.run((ctx) => ctx.db.query('backups').collect());
+    expect(backups.filter((x) => x.reason === 'Before replacing account bookmarks')).toHaveLength(
+      1,
+    );
+  });
+
+  it('disconnects before restoring the original tree and never uploads restoration or later detached edits', async () => {
+    const { a, c, t } = await browserWithOriginals();
+    await c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Laptop' });
+    const connected = await ready(c);
+    const snapshot = structuredClone(connected.joinRecovery);
+    await expect(c.engine.command({ type: 'restore', confirmed: false })).rejects.toThrow(
+      'Confirm',
+    );
+    await c.native.create({ parentId: '1', title: 'Unsynced', url: 'https://unsynced.example' });
+    await c.engine.command({ type: 'restore', confirmed: true });
+    let restored = await c.store.read();
+    expect(restored.connected).toBe(false);
+    expect(restored.account).toBeUndefined();
+    expect(restored.outbox).toEqual([]);
+    expect(restored.joinRecovery).toEqual(snapshot);
+    expect(restored.baseline.map((n) => n.title).sort()).toEqual(['Before Crossmark', 'Original']);
+    expect((await t.run((ctx) => ctx.db.get(connected.deviceId as Id<'devices'>)))?.revoked).toBe(
+      true,
+    );
+    await c.native.create({
+      parentId: '1',
+      title: 'Detached edit',
+      url: 'https://detached.example',
+    });
+    await c.engine.sync();
+    await c.engine.startup();
+    expect((await ready(a)).baseline.map((n) => n.url)).toEqual(['https://one.example']);
+    await c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Rejoined' });
+    restored = await ready(c);
+    expect(restored.joinRecovery).toEqual(snapshot);
+    expect(restored.baseline.map((n) => n.url)).toEqual(['https://one.example']);
+    await c.engine.command({ type: 'restore', confirmed: true });
+    expect((await c.store.read()).baseline.map((n) => n.title).sort()).toEqual([
+      'Before Crossmark',
+      'Original',
+    ]);
+  });
+
+  it('resumes an interrupted native restore while remaining outside sync', async () => {
+    const { a, c } = await browserWithOriginals();
+    await c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Laptop' });
+    const create = c.native.create.bind(c.native);
+    let interrupted = false;
+    c.native.create = async (data) => {
+      const result = await create(data);
+      if (!interrupted) {
+        interrupted = true;
+        throw new Error('Interrupted native create');
+      }
+      return result;
+    };
+    await expect(c.engine.command({ type: 'restore', confirmed: true })).rejects.toThrow(
+      'Interrupted',
+    );
+    const failed = await c.store.read();
+    expect(failed.connected).toBe(false);
+    expect(failed.restorePending).toBeDefined();
+    expect(failed.journal).toBeDefined();
+    await expect(
+      c.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Laptop' }),
+    ).rejects.toThrow('Finish restoring');
+    await c.engine.startup();
+    const restored = await c.store.read();
+    expect(restored.restorePending).toBeUndefined();
+    expect(restored.connected).toBe(false);
+    expect(c.native.nodes.filter((n) => n.title === 'Before Crossmark')).toHaveLength(1);
+    expect(c.native.nodes.filter((n) => n.url === 'https://original.example')).toHaveLength(1);
+    expect((await ready(a)).baseline.map((n) => n.url)).toEqual(['https://one.example']);
+  });
+
+  it('does not touch local bookmarks when revocation fails', async () => {
+    const { c } = await browserWithOriginals();
+    await c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Laptop' });
+    const before = structuredClone(c.native.nodes);
+    const spy = vi.spyOn(c.transport, 'mutation').mockRejectedValueOnce(new TypeError('offline'));
+    await expect(c.engine.command({ type: 'restore', confirmed: true })).rejects.toThrow('offline');
+    expect((await c.store.read()).connected).toBe(true);
+    expect(c.native.nodes).toEqual(before);
+    spy.mockRestore();
+    await c.engine.command({ type: 'restore', confirmed: true });
+    expect((await c.store.read()).connected).toBe(false);
+  });
+
+  it('can restore an empty pre-Crossmark tree', async () => {
+    const { b, a } = await connectPair();
+    expect((await b.store.read()).joinRecovery).toEqual([]);
+    await b.engine.command({ type: 'restore', confirmed: true });
+    expect((await b.store.read()).baseline).toEqual([]);
+    expect(b.native.nodes.filter((n) => n.parentId)).toEqual([]);
+    expect((await ready(a)).baseline).toHaveLength(1);
+  });
+});
+
+describe('cancelling a failed registration', () => {
+  it('unlocks both choices and restoration, and reads fresh native data before replacing another account', async () => {
+    const { a, device, account } = await connectPair();
+    const c = device('Pending');
+    await c.native.create({ parentId: '1', title: 'Original', url: 'https://original.example' });
+    const spy = vi.spyOn(c.transport, 'mutation').mockRejectedValueOnce(new TypeError('offline'));
+    await expect(
+      c.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Pending' }),
+    ).rejects.toThrow('offline');
+    spy.mockRestore();
+    await c.engine.command({ type: 'disconnect' });
+    const cancelled = await c.store.read();
+    expect(cancelled.registrationPending).toBeUndefined();
+    expect(cancelled.connectionChoice).toBeUndefined();
+    await c.engine.command({ type: 'restore', confirmed: true });
+    await c.native.create({
+      parentId: '1',
+      title: 'Added after cancellation',
+      url: 'https://fresh.example',
+    });
+    const other = await account('other-account@example.com');
+    c.auth.signIn = other.auth.signIn;
+    c.auth.token = other.auth.token;
+    c.transport.query = other.t.query.bind(other.t) as typeof c.transport.query;
+    c.transport.mutation = other.t.mutation.bind(other.t) as typeof c.transport.mutation;
+    await c.engine.command({ type: 'signIn', credentials });
+    expect((await c.store.read()).baseline.filter((n) => n.url)).toHaveLength(2);
+    await c.engine.command({ type: 'connect', choice: 'local', name: 'Other account' });
+    expect((await ready(c)).baseline.map((n) => n.url).sort()).toEqual([
+      'https://fresh.example',
+      'https://original.example',
+    ]);
+    expect((await ready(a)).baseline.map((n) => n.url)).toEqual(['https://one.example']);
+  });
+
+  it('retires a registration with a lost acknowledgement before allowing the opposite choice', async () => {
+    const { device, t } = await connectPair();
+    const c = device('Pending');
+    await c.native.create({ parentId: '1', title: 'Mine', url: 'https://mine.example' });
+    const installationId = (await c.store.read()).installationId;
+    const mutation = c.transport.mutation.bind(c.transport);
+    let lost = false;
+    c.transport.mutation = (async (...args: Parameters<typeof mutation>) => {
+      const value = await mutation(args[0], args[1]);
+      if (!lost) {
+        lost = true;
+        throw new TypeError('Lost registration response');
+      }
+      return value;
+    }) as typeof mutation;
+    await expect(
+      c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Pending' }),
+    ).rejects.toThrow('Lost registration');
+    await c.engine.command({ type: 'disconnect' });
+    expect((await c.store.read()).installationId).not.toBe(installationId);
+    const devices = await t.run((ctx) => ctx.db.query('devices').collect());
+    expect(devices.find((d) => d.installationId === installationId)?.revoked).toBe(true);
+    await c.engine.command({
+      type: 'connect',
+      choice: 'local',
+      credentials,
+      name: 'Try other choice',
+    });
+    expect((await ready(c)).baseline.map((n) => n.url)).toEqual(['https://mine.example']);
+  });
+
+  it('keeps cancellation retryable if the server cannot confirm revocation', async () => {
+    const { device } = await connectPair();
+    const c = device('Pending');
+    const spy = vi.spyOn(c.transport, 'mutation').mockRejectedValueOnce(new TypeError('offline'));
+    await expect(
+      c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Pending' }),
+    ).rejects.toThrow('offline');
+    spy.mockRejectedValueOnce(new TypeError('Cannot cancel offline'));
+    await expect(c.engine.command({ type: 'disconnect' })).rejects.toThrow('Cannot cancel offline');
+    expect((await c.store.read()).registrationPending).toBe(true);
+    spy.mockRestore();
+    await c.engine.command({ type: 'disconnect' });
+    expect((await c.store.read()).registrationPending).toBeUndefined();
+  });
+});
+
+it('does not carry a cancelled registration baseline through an installed-account switch', async () => {
+  const { a, account } = await connectPair();
+  const installed = (await a.store.read()).installedAccountId;
+  await a.engine.command({ type: 'disconnect' });
+  const spy = vi
+    .spyOn(a.transport, 'mutation')
+    .mockRejectedValueOnce(new TypeError('Failed connect'));
+  await expect(
+    a.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Reconnect' }),
+  ).rejects.toThrow('Failed connect');
+  spy.mockRestore();
+  await a.engine.command({ type: 'disconnect' });
+  await a.native.create({
+    parentId: '1',
+    title: 'Fresh native edit',
+    url: 'https://fresh.example',
+  });
+  expect((await a.store.read()).installedAccountId).toBe(installed);
+  const other = await account('replacement-target@example.com');
+  await other.t.mutation(api.sync.connect, {
+    installationId: crypto.randomUUID(),
+    name: 'Other seed',
+    browser: 'Chrome',
+    nodes: [],
+  });
+  a.auth.signIn = other.auth.signIn;
+  a.auth.token = other.auth.token;
+  a.transport.query = other.t.query.bind(other.t) as typeof a.transport.query;
+  a.transport.mutation = other.t.mutation.bind(other.t) as typeof a.transport.mutation;
+  await a.engine.command({ type: 'signIn', credentials });
+  expect((await a.store.read()).baseline.filter((n) => n.url)).toHaveLength(2);
+  await a.engine.command({ type: 'connect', choice: 'local', name: 'Replace other account' });
+  expect((await ready(a)).baseline.map((n) => n.url).sort()).toEqual([
+    'https://fresh.example',
+    'https://one.example',
+  ]);
 });

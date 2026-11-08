@@ -125,6 +125,7 @@ export default defineBackground(() => {
     'disconnect',
     'revoke',
     'export',
+    'restore',
   ]);
   browser.runtime.onMessage.addListener((message: unknown, sender: Runtime.MessageSender) => {
     if (sender.id !== browser.runtime.id || !sender.url?.startsWith(browser.runtime.getURL('')))
@@ -140,7 +141,8 @@ export default defineBackground(() => {
     if (m.type === 'connect' || m.type === 'signIn') {
       const c = m.credentials as Record<string, unknown> | undefined;
       if (
-        (m.type === 'connect' && typeof m.name !== 'string') ||
+        (m.type === 'connect' &&
+          (typeof m.name !== 'string' || !['remote', 'local'].includes(String(m.choice)))) ||
         (m.type === 'signIn' && !c) ||
         (c !== undefined &&
           (!c ||

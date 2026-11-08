@@ -33,7 +33,7 @@ function ownedCollection(ctx: QueryCtx, ownerId: string) {
     .withIndex('by_owner', (q) => q.eq('ownerId', ownerId))
     .unique();
 }
-// Answers what connect would report as `joining`, so the popup can confirm first.
+// Report an existing collection so the popup requires a local-versus-account choice.
 export const joinsExisting = query({
   args: { installationId: v.string() },
   handler: async (ctx, { installationId }) => {
@@ -41,12 +41,19 @@ export const joinsExisting = query({
     if (!/^[a-f0-9-]{36}$/.test(installationId)) fail('Invalid installation ID.');
     const existing = await installation(ctx, user._id, installationId);
     if (existing?.revoked) fail('This installation was revoked. Sign out before signing in again.');
-    if (existing) return (await ctx.db.get(existing.collectionId))?.sourceDevice !== installationId;
+    if (existing) return true;
     return !!(await ownedCollection(ctx, user._id));
   },
 });
 export const connect = mutation({
-  args: { installationId: v.string(), name: v.string(), browser: v.string(), nodes: v.array(node) },
+  args: {
+    installationId: v.string(),
+    name: v.string(),
+    browser: v.string(),
+    nodes: v.array(node),
+    // Older clients only supported replacing local with remote.
+    choice: v.optional(v.union(v.literal('remote'), v.literal('local'))),
+  },
   handler: async (ctx, args) => {
     const user = await authComponent.getAuthUser(ctx);
     if (!/^[a-f0-9-]{36}$/.test(args.installationId)) fail('Invalid installation ID.');
@@ -88,6 +95,28 @@ export const connect = mutation({
       sequence: 0,
       revoked: false,
     });
+    if (joining && args.choice === 'local') {
+      validateTree(args.nodes);
+      // Keep old identities as tombstones so delayed edits cannot revive the replaced tree.
+      const revision = collection.revision + 1;
+      const oldIds = new Set(collection.nodes.map((n) => n.id));
+      if (args.nodes.some((n) => oldIds.has(n.id)))
+        fail('Use fresh bookmark identities when replacing the collection.');
+      const nodes = [
+        ...collection.nodes.map((n) => ({ ...n, deleted: true, revision })),
+        ...args.nodes.map((n) => ({ ...n, revision, deleted: false })),
+      ];
+      validateTree(nodes);
+      await ctx.db.insert('backups', {
+        collectionId: collection._id,
+        deviceId,
+        nodes: collection.nodes,
+        at: Date.now(),
+        reason: 'Before replacing account bookmarks',
+      });
+      await ctx.db.patch(collection._id, { nodes, revision, sourceDevice: args.installationId });
+      return { deviceId, joining: false };
+    }
     if (!joining)
       await ctx.db.insert('backups', {
         collectionId: collection._id,
@@ -97,6 +126,16 @@ export const connect = mutation({
         reason: 'First browser snapshot',
       });
     return { deviceId, joining };
+  },
+});
+// A registration response may be lost after commit, so cancellation must retire
+// the authenticated installation even when the client has never received its device ID.
+export const cancelRegistration = mutation({
+  args: { installationId: v.string() },
+  handler: async (ctx, { installationId }) => {
+    const user = await authComponent.getAuthUser(ctx);
+    const device = await installation(ctx, user._id, installationId);
+    if (device && !device.revoked) await ctx.db.patch(device._id, { revoked: true });
   },
 });
 // Older extensions still call join after showing their former merge review.

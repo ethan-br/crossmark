@@ -1,3 +1,4 @@
+import { restoreConfirmation } from './shared';
 import { Download, LogOut } from 'lucide-react';
 import type { State } from '../state';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,25 @@ export function Settings({
           <LogOut />
           Sign out
         </Button>
+      </section>
+      <section className="flex flex-col gap-2">
+        <SectionLabel>Pre-Crossmark bookmarks</SectionLabel>
+        <p className="text-xs text-muted-foreground">
+          Restore this browser’s original bookmarks from before Crossmark. This disconnects the
+          browser first. The account collection and your other browsers stay as they are.
+        </p>
+        <Button
+          variant="outline"
+          disabled={busy || state.joinRecovery === undefined}
+          onClick={() => confirm(restoreConfirmation)}
+        >
+          Disconnect and restore
+        </Button>
+        {state.joinRecovery === undefined && (
+          <p className="text-xs text-muted-foreground">
+            No pre-Crossmark snapshot is saved on this installation.
+          </p>
+        )}
       </section>
       <p className="text-xs text-muted-foreground">
         Bookmarks sync while your browsers are running. A 30-second check catches missed updates.
