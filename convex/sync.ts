@@ -40,7 +40,8 @@ export const joinsExisting = query({
     const user = await authComponent.getAuthUser(ctx);
     if (!/^[a-f0-9-]{36}$/.test(installationId)) fail('Invalid installation ID.');
     const existing = await installation(ctx, user._id, installationId);
-    if (existing?.revoked) fail('This installation was revoked. Sign out before signing in again.');
+    if (existing?.revoked)
+      fail('This browser was disconnected. Sign out of Crossmark here, then sign in again.');
     if (existing) return true;
     return !!(await ownedCollection(ctx, user._id));
   },
@@ -60,7 +61,7 @@ export const connect = mutation({
     const existing = await installation(ctx, user._id, args.installationId);
     if (existing) {
       if (existing.revoked)
-        fail('This installation was revoked. Sign out before signing in again.');
+        fail('This browser was disconnected. Sign out of Crossmark here, then sign in again.');
       const collection = await ctx.db.get(existing.collectionId);
       return { deviceId: existing._id, joining: collection?.sourceDevice !== args.installationId };
     }
@@ -77,13 +78,14 @@ export const connect = mutation({
       });
       collection = await ctx.db.get(collectionId);
     }
-    if (!collection) return fail('Collection unavailable.');
+    if (!collection)
+      return fail('The account’s synced bookmarks are unavailable. Try again later.');
     const devices = await ctx.db
       .query('devices')
       .withIndex('by_collection', (q) => q.eq('collectionId', collection._id))
       .collect();
     if (devices.filter((d) => !d.revoked).length >= 10)
-      fail('This collection already has 10 browsers.');
+      fail('This account already has 10 connected browsers. Disconnect one before adding another.');
     const deviceId = await ctx.db.insert('devices', {
       ownerId: user._id,
       collectionId: collection._id,
@@ -101,7 +103,7 @@ export const connect = mutation({
       const revision = collection.revision + 1;
       const oldIds = new Set(collection.nodes.map((n) => n.id));
       if (args.nodes.some((n) => oldIds.has(n.id)))
-        fail('Use fresh bookmark identities when replacing the collection.');
+        fail('Crossmark could not prepare the replacement bookmarks. Cancel and connect again.');
       const nodes = [
         ...collection.nodes.map((n) => ({ ...n, deleted: true, revision })),
         ...args.nodes.map((n) => ({ ...n, revision, deleted: false })),
@@ -156,7 +158,8 @@ export const snapshot = query({
   handler: async (ctx, { deviceId }) => {
     const device = await authenticate(ctx, deviceId);
     const collection = await ctx.db.get(device.collectionId);
-    if (!collection) return fail('Collection unavailable.');
+    if (!collection)
+      return fail('The account’s synced bookmarks are unavailable. Try again later.');
     const devices = await ctx.db
       .query('devices')
       .withIndex('by_collection', (q) => q.eq('collectionId', device.collectionId))
@@ -196,7 +199,8 @@ export const signal = query({
   handler: async (ctx, { deviceId }) => {
     const device = await authenticate(ctx, deviceId);
     const collection = await ctx.db.get(device.collectionId);
-    if (!collection) return fail('Collection unavailable.');
+    if (!collection)
+      return fail('The account’s synced bookmarks are unavailable. Try again later.');
     const devices = await ctx.db
       .query('devices')
       .withIndex('by_collection', (q) => q.eq('collectionId', device.collectionId))
@@ -217,9 +221,10 @@ export const push = mutation({
   handler: async (ctx, { deviceId, operations }) => {
     const device = await authenticate(ctx, deviceId);
     const collection = await ctx.db.get(device.collectionId);
-    if (!collection) return fail('Collection unavailable.');
+    if (!collection)
+      return fail('The account’s synced bookmarks are unavailable. Try again later.');
     if (operations.length > 500 || JSON.stringify(operations).length > 600_000)
-      fail('Sync batch is too large.');
+      fail('Too many bookmark changes to send at once.');
     let nodes: Node[] = collection.nodes;
     let revision = collection.revision;
     let sequence = device.sequence;
@@ -242,7 +247,7 @@ export const push = mutation({
         continue;
       }
       if (op.sequence !== sequence + 1)
-        fail('Out-of-order operation. Retry the pending batch first.');
+        fail('Some earlier bookmark changes have not been sent. Retry syncing first.');
       const result = applyOperation(nodes, op, ++revision);
       nodes = result.nodes;
       sequence = op.sequence;

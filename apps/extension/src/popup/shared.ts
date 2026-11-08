@@ -7,7 +7,7 @@ import type { State } from '../state';
 export async function command<T = State>(message: Command): Promise<T> {
   const result = (await browser.runtime.sendMessage(message)) as
     { data: T; error?: string } | undefined;
-  if (!result) throw new Error('The background is restarting. Try again.');
+  if (!result) throw new Error('Crossmark is restarting. Try again in a moment.');
   if (result.error) throw new Error(result.error);
   return result.data;
 }
@@ -52,7 +52,7 @@ export function statusLabel(state: State): { label: string; tone: Tone } {
 
 export const restoreConfirmation = {
   title: 'Disconnect and restore?',
-  body: 'This browser will leave sync and its current bookmarks will be replaced with the saved pre-Crossmark snapshot. Unsynced changes will not be uploaded. Other browsers and the account collection stay as they are. To sync again, sign in and choose which collection to keep.',
+  body: 'This browser will stop syncing before its current bookmarks are replaced with its saved original bookmarks from before Crossmark. Changes waiting to sync will not be sent. The account’s synced bookmarks and other browsers stay as they are. This browser stays disconnected until you sign in and choose which bookmarks to keep.',
   command: { type: 'restore', confirmed: true } as const,
   label: 'Disconnect and restore',
 };

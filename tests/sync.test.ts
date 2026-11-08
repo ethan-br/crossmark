@@ -115,7 +115,7 @@ describe('canonical synchronization', () => {
     expect(diff([bookmark()], [bookmark()], 42)).toEqual([]);
   });
   it('rejects duplicate IDs and overlong payloads', () => {
-    expect(() => validateTree([bookmark(), bookmark()])).toThrow('Duplicate');
+    expect(() => validateTree([bookmark(), bookmark()])).toThrow('duplicate bookmark data');
     expect(() => validateTree([bookmark('a', { title: 'x'.repeat(1001) })])).toThrow('Invalid');
   });
 });

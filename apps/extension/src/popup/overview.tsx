@@ -28,13 +28,14 @@ export function Overview({
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
       <Stats bookmarks={stats.bookmarks} folders={stats.folders}>
         {state.lastSync ? `Synced ${relative(state.lastSync)}` : 'Never synced'}
-        {pending > 0 && <span className="text-primary"> · {pending} pending</span>}
+        {pending > 0 && <span className="text-primary"> · {pending} changes waiting to sync</span>}
       </Stats>
       {review && (
         <section className="rounded-md border border-primary/40 bg-primary/5 px-4 py-3">
           <p className="text-sm font-medium">Approve changes</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {pending} changes will update your other browsers. A recovery snapshot is saved first.
+            Review the changes in this browser’s bookmark manager before approving. These {pending}
+            changes will update your other connected browsers.
           </p>
         </section>
       )}
@@ -63,7 +64,7 @@ export function Overview({
         </Button>
       </div>
       <section className="flex min-h-0 flex-1 flex-col gap-1">
-        <SectionLabel>Recent</SectionLabel>
+        <SectionLabel>Recent changes</SectionLabel>
         <ScrollArea className="min-h-0 flex-1 -mr-3 pr-3">
           <ActivityList events={activity.slice(0, 20)} />
         </ScrollArea>

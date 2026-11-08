@@ -35,7 +35,7 @@ export function Settings({
           onClick={() =>
             confirm({
               title: 'Sign out?',
-              body: 'This browser stops syncing and is removed from your connected browsers. Its bookmarks stay here. Sync pending changes first; sign in with the same account to reconnect.',
+              body: 'This browser stops syncing and is removed from your connected browsers. Its bookmarks stay here. Sync any changes waiting to be sent first. To reconnect, sign in and choose which bookmarks to keep.',
               command: { type: 'disconnect' },
               label: 'Sign out',
             })
@@ -49,7 +49,8 @@ export function Settings({
         <SectionLabel>Pre-Crossmark bookmarks</SectionLabel>
         <p className="text-xs text-muted-foreground">
           Restore this browser’s original bookmarks from before Crossmark. This disconnects the
-          browser first. The account collection and your other browsers stay as they are.
+          browser first and keeps it disconnected until you reconnect. The account’s synced
+          bookmarks and your other browsers stay as they are.
         </p>
         <Button
           variant="outline"
@@ -60,12 +61,13 @@ export function Settings({
         </Button>
         {state.joinRecovery === undefined && (
           <p className="text-xs text-muted-foreground">
-            No pre-Crossmark snapshot is saved on this installation.
+            No original bookmarks are saved in this copy of Crossmark.
           </p>
         )}
       </section>
       <p className="text-xs text-muted-foreground">
-        Bookmarks sync while your browsers are running. A 30-second check catches missed updates.
+        Bookmarks sync while your browsers are running. Crossmark also checks for updates every 30
+        seconds.
       </p>
       <p className="text-[11px] text-muted-foreground">v{packageJson.version}</p>
     </div>

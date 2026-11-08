@@ -1205,7 +1205,9 @@ it('keeps pending edits when reauthentication is needed', async () => {
 it('reports an unreachable auth backend as offline, not a sign-in failure', async () => {
   const { a } = await connectPair();
   a.auth.token = async () => {
-    throw new Error('Could not reach the Crossmark backend at https://backend.convex.site.');
+    throw new Error(
+      'Could not reach the Crossmark server at https://backend.convex.site. Check your connection and try again.',
+    );
   };
   await a.engine.sync();
   const state = await a.store.read();
@@ -1457,7 +1459,7 @@ describe('explicit connection choice and detached restoration', () => {
     await ready(a);
     await expect(
       c.engine.command({ type: 'connect', choice: 'remote', credentials, name: 'Laptop' }),
-    ).rejects.toThrow('original connection choice');
+    ).rejects.toThrow('same bookmarks selected');
     await c.engine.command({ type: 'connect', choice: 'local', credentials, name: 'Laptop' });
     expect((await ready(c)).baseline.some((n) => n.url === 'https://after.example')).toBe(true);
     const backups = await t.run((ctx) => ctx.db.query('backups').collect());

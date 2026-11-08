@@ -32,7 +32,7 @@ async function deliverPopupCommand<T = State>(message: Command): Promise<T> {
   });
   const result = (await Promise.resolve(raw)) as { data: T; error?: string } | false | undefined;
   if (result === false || result === undefined)
-    throw new Error('The background is restarting. Try again.');
+    throw new Error('Crossmark is restarting. Try again in a moment.');
   if (result.error) throw new Error(result.error);
   return result.data;
 }

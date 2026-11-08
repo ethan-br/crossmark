@@ -75,7 +75,7 @@ export function Browsers({
                   onClick={() =>
                     confirm({
                       title: `Disconnect ${d.name}?`,
-                      body: `${d.name} stops syncing and is removed from your connected browsers. Its bookmarks stay in that browser. To reconnect it, sign out and sign in again on that browser.`,
+                      body: `${d.name} stops syncing and is removed from your connected browsers. Its bookmarks stay in that browser. To reconnect it, sign out and sign in again on that browser, then choose which bookmarks to keep.`,
                       command: { type: 'revoke', deviceId: d.id },
                       label: 'Disconnect',
                     })

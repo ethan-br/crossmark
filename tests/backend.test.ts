@@ -110,7 +110,7 @@ describe('Convex authorization and durable operations', () => {
     );
     await t.mutation(api.sync.revoke, { deviceId, targetDeviceId: deviceId });
     await expect(t.query(api.sync.joinsExisting, { installationId })).rejects.toThrow(
-      'was revoked',
+      'was disconnected',
     );
   });
   it('does not import local nodes when an older joining extension calls join', async () => {
@@ -156,7 +156,7 @@ describe('Convex authorization and durable operations', () => {
         deviceId,
         operations: [{ id: 'bad', sequence: 2, nodeId: 'a', baseRevision: 1, kind: 'delete' }],
       }),
-    ).rejects.toThrow('Out-of-order');
+    ).rejects.toThrow('earlier bookmark changes');
     expect((await t.query(api.sync.snapshot, { deviceId })).revision).toBe(1);
   });
   it('pauses another browser in the same collection only', async () => {

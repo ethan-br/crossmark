@@ -71,7 +71,7 @@ describe('browser projections', () => {
     expect(native.nodes.filter((n) => n.title === 'Bookmarks Menu')).toHaveLength(1);
     state.connected = true;
     await native.remove(state.roots.menu);
-    await expect(adapter.read(state)).rejects.toThrow('mapped bookmark root');
+    await expect(adapter.read(state)).rejects.toThrow('bookmark folder Crossmark needs');
     state.connected = false;
     await expect(adapter.read(state)).resolves.toEqual([]);
     expect(state.roots.menu).toBeUndefined();
@@ -125,7 +125,7 @@ describe('browser projections', () => {
     state.connected = true;
     native.nodes = native.nodes.filter((n) => n.id !== '5' && n.id !== '6');
     await expect(adapter.read(state)).rejects.toThrow(
-      'selected bookmark collection is unavailable',
+      'previously selected browser bookmarks are unavailable',
     );
   });
   it('reselects live roots before connecting when an account tree disappears', async () => {

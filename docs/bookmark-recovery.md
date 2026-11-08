@@ -1,24 +1,32 @@
 # Connecting a browser and restoring its original bookmarks
 
-When connecting to an existing account, choose one collection explicitly:
+When connecting to an existing account, choose which bookmarks to keep. The two sets will not be combined.
 
-- **Use synced bookmarks:** replace the bookmarks in this browser with the account collection. The original local tree is saved before registration or replacement.
-- **Use this browser’s bookmarks:** replace the account collection with this browser’s current tree. All connected browsers receive this replacement. Confirm the account-wide change before continuing. The previous account collection is saved in a server recovery snapshot; server snapshots are not currently browsable in the popup.
+- **Use synced bookmarks:** replace this browser’s bookmarks with the account’s synced bookmarks.
+- **Use this browser’s bookmarks:** replace the account’s synced bookmarks with this browser’s current bookmarks. This also replaces bookmarks on all other connected browsers. Confirm this change before continuing.
 
-If a connection fails, retry the same choice or Cancel. Cancellation checks the server for a possibly completed registration, retires it, and unlocks both choices. It requires a connection to the server; it does not undo an account replacement that already committed.
+Crossmark saves this browser’s original bookmarks before it first connects. That saved copy survives reconnects, sign-out and account changes; it is not replaced each time you connect. Before replacing the account’s bookmarks, Crossmark also saves a copy on the server. The popup does not offer a way to browse or restore server copies.
 
-There is no merge option. A new account starts with its first browser’s bookmarks. Once connected, individual additions, edits, moves, and deletions continue syncing normally, with existing large-change review protection.
+If connecting fails, retry with the same bookmarks selected, or choose **Cancel** before selecting different bookmarks. Cancel needs a connection to the Crossmark server to check whether connecting finished and disconnect this browser if needed. It does not undo an account replacement that already happened.
+
+A new account starts with its first browser’s bookmarks. Once connected, individual additions, edits, moves and deletions sync normally. Large changes may require approval before they update other browsers.
 
 ## Disconnect and restore
 
-In Settings → Pre-Crossmark bookmarks, choose **Disconnect and restore** and confirm. Crossmark revokes this browser’s connection before replacing its current bookmarks with the original saved tree. Other browsers and the account collection are unchanged. Unsynced local changes are not uploaded; the tree immediately before restoration is retained as the local safety snapshot in the JSON export.
+In Settings → Pre-Crossmark bookmarks, choose **Disconnect and restore** and confirm. Crossmark removes this browser from sync before replacing its current bookmarks with its saved original bookmarks. The account’s synced bookmarks and other browsers stay as they are. Changes waiting to sync are not sent. Crossmark keeps a safety copy of this browser’s bookmarks from immediately before the restore in the JSON export.
 
-After restoration, the browser stays outside sync, including after restart and later native bookmark edits. To reconnect, sign in and make the local-versus-account choice again. The original snapshot is preserved across reconnects, sign-out and account changes. If signed out, the welcome screen also offers restoration when a snapshot exists. An empty original snapshot can be restored.
+After restoring, this browser stays disconnected, even after restarting or editing bookmarks. To reconnect, sign in and choose which bookmarks to keep again. If signed out, the welcome screen also offers a restore when original bookmarks are saved. If this browser originally had no bookmarks, restoring removes its current bookmarks.
 
-Revocation requires a working connection and valid sign-in. If revocation fails, bookmarks remain unchanged. Once revocation succeeds, the restore job is saved before native writes and uses the existing native-write journal. If interrupted, startup resumes it; the popup also offers Retry restoration. Keep the browser’s bookmark manager idle until restoration finishes.
+Disconnecting needs a working server connection and valid sign-in. If it fails, the restore does not start. If restoring is interrupted after disconnection, Crossmark tries to continue at startup; the popup also offers **Retry restore**. Keep the browser’s bookmark manager idle until restoring finishes.
 
 ## Exports and practical limits
 
-Settings → Export bookmarks downloads version 1 JSON containing the cached collection (`nodes`), last safety snapshot (`localRecovery`), original tree (`joinRecovery`), and pending operations. These files include private bookmark titles and URLs. Keep exports outside extension storage before removing the extension or clearing browser data, which erases local recovery snapshots. Restoring pre-Crossmark bookmarks uses the locally saved snapshot; the popup does not offer JSON import or additive recovery.
+Settings → **Export bookmarks** downloads a JSON file, not a file you can import through the browser’s bookmark manager. It includes the last known synced bookmarks, a safety copy, the original bookmarks and changes waiting to sync. The popup does not offer an import feature.
 
-Only supported portable roots are replaced. Managed, mobile and unsupported roots remain untouched. Chromium cannot represent separators. Account replacement keeps old identities as tombstones to protect against delayed edits. Both the incoming live tree and retained tombstones must fit the normal 2,000-record / 600 KB collection limits; an over-capacity replacement is rejected atomically. Concurrent edits on other browsers remain ordinary sync changes, so replacement does not freeze all devices globally. Deploy the updated Convex `connect` mutation before distributing an extension that offers account replacement.
+Exports contain private bookmark titles and URLs. Save them outside the extension before removing Crossmark or clearing its browser data: those actions erase the saved original bookmarks and safety copy. Restoring original bookmarks needs the copy saved in this browser.
+
+Only supported bookmark folders are replaced. Bookmarks managed by an organization, mobile bookmarks and unsupported folders stay as they are. Chromium browsers cannot display bookmark separators.
+
+Account limits include saved records of deleted bookmarks: 2,000 total records and 600 KB. A replacement can exceed these limits even when fewer than 2,000 bookmarks are visible. Changes made on other connected browsers can still sync during replacement.
+
+For developers: exports use version 1, with synced bookmarks in `nodes`, the last safety copy in `localRecovery`, original bookmarks in `joinRecovery` and pending operations. Deploy the updated Convex `connect` mutation before distributing an extension that offers account replacement.

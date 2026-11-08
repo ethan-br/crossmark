@@ -107,7 +107,7 @@ it.each([
 ])('asks for a backend deploy when it predates email/password: %s', async (code, status) => {
   fetchMock.mockResolvedValue(Response.json({ code }, { status }));
   await expect(session().signIn(credentials)).rejects.toThrow(
-    'The backend at https://backend.convex.site does not support email/password login. Deploy the current Convex functions',
+    'The Crossmark server at https://backend.convex.site needs an update before you can sign in.',
   );
 });
 
@@ -131,7 +131,7 @@ it('explains a missing trusted origin', async () => {
     Response.json({ code: 'INVALID_ORIGIN', message: 'Invalid origin' }, { status: 403 }),
   );
   await expect(session().signIn(credentials)).rejects.toThrow(
-    `Add ${extensionOrigin()} to AUTH_TRUSTED_ORIGINS`,
+    `allow ${extensionOrigin()} in AUTH_TRUSTED_ORIGINS`,
   );
 });
 
