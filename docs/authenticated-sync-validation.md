@@ -67,6 +67,15 @@ session expiry/renewal, interrupted native writes/process kills, joining and
 rejoining native ID stability, remote pause, and account-root replacement.
 Do not treat the new integration tests or signed-out smoke as that evidence.
 
+## Integration recheck — 2026-11-08
+
+After merging current `main`, update the test bridge for the required explicit
+`choice: 'remote'` connect command and define Firefox roots locally because the
+shared setup export was removed. `npm ci`, `npm run typecheck`, the four focused
+integration tests, and the full suite (**178 tests in 13 files**) passed. The
+original CI failures all occurred at TypeScript checking on those two API
+incompatibilities, before tests, browser launch or packaging.
+
 ## Integration considerations
 
 Only a new test file and validation documentation are added; no production

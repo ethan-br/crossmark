@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ConvexHttpClient } from 'convex/browser';
 import { authenticatedBackend } from './fixtures/auth';
 import { MemoryBookmarks } from './fixtures/bookmarks';
-import { firefoxBookmarkRoots } from './setup/wxt';
 import { Engine } from '../apps/extension/src/engine';
 import { Adapter } from '../apps/extension/src/adapter';
 import { initialState, type State, type Store } from '../apps/extension/src/state';
@@ -31,7 +30,16 @@ async function setup() {
         state = structuredClone(next);
       },
     };
-    const native = new MemoryBookmarks(firefox ? structuredClone(firefoxBookmarkRoots) : undefined);
+    const native = new MemoryBookmarks(
+      firefox
+        ? [
+            { id: 'toolbar_____', title: 'Toolbar' },
+            { id: 'unfiled_____', title: 'Other' },
+            { id: 'menu________', title: 'Menu' },
+            { id: 'mobile______', title: 'Mobile' },
+          ]
+        : undefined,
+    );
     const adapter = new Adapter(native, firefox);
     let session: string | undefined;
     let identity: ReturnType<typeof backend.withIdentity> | undefined;
@@ -110,6 +118,7 @@ async function setup() {
   });
   await a.engine.command({
     type: 'connect',
+    choice: 'remote',
     credentials: { ...credentials, create: true },
     name: 'Chromium',
   });
@@ -120,7 +129,7 @@ async function setup() {
   });
   await b.engine.command({ type: 'signIn', credentials });
   expect(b.native.nodes.some((n) => n.title === 'Local only')).toBe(true);
-  await b.engine.command({ type: 'connect', name: 'Firefox' });
+  await b.engine.command({ type: 'connect', choice: 'remote', name: 'Firefox' });
   return { a, b, backend };
 }
 async function ready(device: Awaited<ReturnType<typeof setup>>['a']) {
@@ -144,7 +153,12 @@ it('authenticates two sessions, replaces on join and preserves native IDs on rej
   await ready(a);
   await ready(b);
   await b.engine.command({ type: 'disconnect' });
-  await b.engine.command({ type: 'connect', credentials, name: 'Firefox rejoined' });
+  await b.engine.command({
+    type: 'connect',
+    choice: 'remote',
+    credentials,
+    name: 'Firefox rejoined',
+  });
   expect(b.native.nodes).toEqual(before);
   expect((await b.store.read()).joinRecovery).toEqual(recovery);
   expect(create).not.toHaveBeenCalled();
