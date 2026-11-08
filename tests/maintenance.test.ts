@@ -57,9 +57,6 @@ it('clears every app and Better Auth table in batches and can be rerun', async (
       data: { identifier: 'test', value: 'code', expiresAt: now, createdAt: now, updatedAt: now },
     },
     { model: 'twoFactor', data: { secret: 'secret', backupCodes: 'codes', userId: 'test' } },
-    { model: 'oauthApplication', data: { clientId: 'test' } },
-    { model: 'oauthAccessToken', data: { accessToken: 'test' } },
-    { model: 'oauthConsent', data: { clientId: 'test' } },
     { model: 'jwks', data: { publicKey: 'public', privateKey: 'private', createdAt: now } },
   ] as const;
   for (const row of authRows) {
