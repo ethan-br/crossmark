@@ -1,7 +1,8 @@
 import { authenticatedBackend } from './fixtures/auth';
 import { describe, it, expect } from 'vitest';
-import { api } from '../convex/_generated/api';
+import { api, internal } from '../convex/_generated/api';
 import type { Node } from '../packages/model';
+import { diff } from '../packages/sync-core';
 const installationId = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
 const node: Node = {
   id: 'a',
@@ -228,7 +229,7 @@ it('retains the losing edit when a tombstone wins', async () => {
     ],
   });
   const snapshot = await t.query(api.sync.snapshot, { deviceId });
-  expect(snapshot.nodes[0].deleted).toBe(true);
+  expect(snapshot.nodes).toEqual([]);
   expect(snapshot.activity.map(({ kind, title }) => ({ kind, title }))).toEqual([
     { kind: 'removed', title: 'A' },
   ]);
@@ -331,11 +332,142 @@ it('marks a browser synced only when it applies changes from elsewhere', async (
   expect(await synced()).toEqual([{ title: 'First', at: expect.any(Number) }, joined]);
 });
 
+it('fences retired identities after history expiry and acknowledges old retries', async () => {
+  const { t, deviceId } = await setup();
+  const deletion = {
+    id: 'delete',
+    sequence: 1,
+    nodeId: 'a',
+    baseRevision: 1,
+    kind: 'delete' as const,
+  };
+  await t.mutation(api.sync.push, { deviceId, operations: [deletion] });
+  await t.run(async (ctx) => {
+    for (const row of await ctx.db.query('operations').collect())
+      await ctx.db.patch(row._id, { at: Date.now() - 31 * 86400000 });
+  });
+  await t.mutation(internal.maintenance.expireRetention, {});
+  expect(await t.run((ctx) => ctx.db.query('operations').collect())).toEqual([]);
+  expect(
+    (await t.mutation(api.sync.push, { deviceId, operations: [deletion] })).acknowledged,
+  ).toEqual(['delete']);
+  for (const [i, kind] of (['create', 'restore', 'update', 'delete'] as const).entries()) {
+    await t.mutation(api.sync.push, {
+      deviceId,
+      operations: [
+        {
+          id: `stale-${kind}`,
+          sequence: i + 2,
+          nodeId: 'a',
+          baseRevision: 0,
+          kind,
+          node,
+          fields: { title: 'Offline' },
+        },
+      ],
+    });
+  }
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes).toEqual([]);
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      {
+        id: 'new',
+        sequence: 6,
+        nodeId: 'fresh',
+        baseRevision: 0,
+        kind: 'create',
+        node: { ...node, id: 'fresh' },
+      },
+    ],
+  });
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes.map((n) => n.id)).toEqual([
+    'fresh',
+  ]);
+});
+
+it('frees snapshot slots for churn and fences all deleted descendants', async () => {
+  const { t, deviceId } = await setup();
+  await t.run(async (ctx) => {
+    const d = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(d.collectionId, {
+      nodes: [
+        { ...node, id: 'folder', kind: 'folder', url: undefined },
+        ...Array.from({ length: 1999 }, (_, i) => ({
+          ...node,
+          id: `child${i}`,
+          parentId: 'folder',
+        })),
+      ],
+    });
+  });
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      { id: 'remove-tree', sequence: 1, nodeId: 'folder', baseRevision: 0, kind: 'delete' },
+      {
+        id: 'fresh',
+        sequence: 2,
+        nodeId: 'fresh',
+        baseRevision: 0,
+        kind: 'create',
+        node: { ...node, id: 'fresh' },
+      },
+      {
+        id: 'stale-child',
+        sequence: 3,
+        nodeId: 'child0',
+        baseRevision: 0,
+        kind: 'create',
+        node: { ...node, id: 'child0' },
+      },
+    ],
+  });
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes.map((n) => n.id)).toEqual([
+    'fresh',
+  ]);
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(2000);
+});
+
+it('bounds recent backups and expires old backups without deleting identity fences', async () => {
+  const { t, deviceId } = await setup();
+  for (let i = 0; i < 12; i++)
+    await t.mutation(api.sync.backup, { deviceId, nodes: [node], reason: 'test' });
+  expect(await t.run((ctx) => ctx.db.query('backups').collect())).toHaveLength(10);
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [{ id: 'del', sequence: 1, nodeId: 'a', baseRevision: 1, kind: 'delete' }],
+  });
+  await t.run(async (ctx) => {
+    for (const row of await ctx.db.query('backups').collect())
+      await ctx.db.patch(row._id, { at: Date.now() - 8 * 86400000 });
+  });
+  await t.mutation(internal.maintenance.expireRetention, {});
+  expect(await t.run((ctx) => ctx.db.query('backups').collect())).toEqual([]);
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(1);
+});
+
+it('migrates existing tombstones on an empty push without changing live records', async () => {
+  const { t, deviceId } = await setup();
+  await t.run(async (ctx) => {
+    const d = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(d.collectionId, {
+      nodes: [
+        { ...node, deleted: true },
+        { ...node, id: 'live' },
+      ],
+    });
+  });
+  await t.mutation(api.sync.push, { deviceId, operations: [] });
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes.map((n) => n.id)).toEqual(['live']);
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(1);
+});
+
 describe('account replacement safety', () => {
   it('rejects over-capacity replacement atomically and retains old data and device count', async () => {
     const { t, deviceId } = await setup();
     const before = await t.query(api.sync.snapshot, { deviceId });
-    const nodes = Array.from({ length: 2000 }, (_, i) => ({
+    const nodes = Array.from({ length: 2001 }, (_, i) => ({
       ...node,
       id: `incoming-${i}`,
       order: i,
@@ -354,4 +486,248 @@ describe('account replacement safety', () => {
     expect(after.devices).toEqual(before.devices);
     expect(after.revision).toBe(before.revision);
   });
+});
+
+it('fences replaced account identities and refuses their reuse in another replacement', async () => {
+  const { t, deviceId } = await setup();
+  const replacement = await t.mutation(api.sync.connect, {
+    installationId: crypto.randomUUID(),
+    name: 'Replacement',
+    browser: 'Chrome',
+    choice: 'local',
+    nodes: [{ ...node, id: 'fresh' }],
+  });
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes.map((n) => n.id)).toEqual([
+    'fresh',
+  ]);
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      {
+        id: 'offline-create',
+        sequence: 1,
+        nodeId: 'a',
+        kind: 'create',
+        baseRevision: 0,
+        node,
+      },
+    ],
+  });
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes.map((n) => n.id)).toEqual([
+    'fresh',
+  ]);
+  await expect(
+    t.mutation(api.sync.connect, {
+      installationId: crypto.randomUUID(),
+      name: 'Reuse',
+      browser: 'Chrome',
+      choice: 'local',
+      nodes: [node],
+    }),
+  ).rejects.toThrow('replacement bookmarks');
+  expect(
+    (await t.query(api.sync.snapshot, { deviceId: replacement.deviceId })).nodes.map((n) => n.id),
+  ).toEqual(['fresh']);
+});
+
+it('allows upgraded over-byte-limit collections to shrink through deletes and trims', async () => {
+  const { t, deviceId } = await setup();
+  const legacy = Array.from({ length: 220 }, (_, i) => ({
+    ...node,
+    id: `legacy${i}`,
+    title: '界'.repeat(1000),
+  }));
+  expect(JSON.stringify(legacy).length).toBeLessThan(600_000);
+  expect(new TextEncoder().encode(JSON.stringify(legacy)).byteLength).toBeGreaterThan(600_000);
+  await t.run(async (ctx) => {
+    const device = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(device.collectionId, { nodes: legacy });
+  });
+  await expect(
+    t.mutation(api.sync.push, {
+      deviceId,
+      operations: [
+        {
+          id: 'grow',
+          sequence: 1,
+          nodeId: 'extra',
+          kind: 'create',
+          baseRevision: 0,
+          node: { ...node, id: 'extra' },
+        },
+      ],
+    }),
+  ).rejects.toThrow('600 KB');
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      {
+        id: 'trim',
+        sequence: 1,
+        nodeId: 'legacy0',
+        kind: 'update',
+        baseRevision: 0,
+        fields: { title: 'trimmed' },
+      },
+    ],
+  });
+  const trimmed = await t.query(api.sync.snapshot, { deviceId });
+  expect(trimmed.nodes[0].title).toBe('trimmed');
+  expect(new TextEncoder().encode(JSON.stringify(trimmed.nodes)).byteLength).toBeGreaterThan(
+    600_000,
+  );
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: Array.from({ length: 40 }, (_, i) => ({
+      id: `delete${i}`,
+      sequence: i + 2,
+      nodeId: `legacy${i}`,
+      kind: 'delete' as const,
+      baseRevision: 0,
+    })),
+  });
+  const recovered = await t.query(api.sync.snapshot, { deviceId });
+  expect(recovered.nodes).toHaveLength(180);
+  expect(new TextEncoder().encode(JSON.stringify(recovered.nodes)).byteLength).toBeLessThan(
+    600_000,
+  );
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(40);
+});
+
+it('rejects a distinct operation reusing a sequence while a receipt exists', async () => {
+  const { t, deviceId } = await setup();
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      {
+        id: 'accepted',
+        sequence: 1,
+        nodeId: 'a',
+        kind: 'update',
+        baseRevision: 1,
+        fields: { title: 'Accepted' },
+      },
+    ],
+  });
+  await expect(
+    t.mutation(api.sync.push, {
+      deviceId,
+      operations: [
+        {
+          id: 'different',
+          sequence: 1,
+          nodeId: 'a',
+          kind: 'delete',
+          baseRevision: 1,
+        },
+      ],
+    }),
+  ).rejects.toThrow('reused a sync sequence');
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes[0].title).toBe('Accepted');
+});
+
+it('replaces a full 2,000-record collection with another full collection', async () => {
+  const { t, deviceId } = await setup();
+  const original = Array.from({ length: 2000 }, (_, i) => ({ ...node, id: `old${i}` }));
+  const incoming = Array.from({ length: 2000 }, (_, i) => ({ ...node, id: `new${i}` }));
+  await t.run(async (ctx) => {
+    const device = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(device.collectionId, { nodes: original });
+  });
+  const replacement = await t.mutation(api.sync.connect, {
+    installationId: crypto.randomUUID(),
+    name: 'Full replacement',
+    browser: 'Chrome',
+    choice: 'local',
+    nodes: incoming,
+  });
+  expect(replacement.joining).toBe(false);
+  const snapshot = await t.query(api.sync.snapshot, { deviceId });
+  expect(snapshot.nodes.map((n) => n.id)).toEqual(incoming.map((n) => n.id));
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(2000);
+});
+
+it('drains a mixed legacy recovery batch when creates and growing edits precede deletes', async () => {
+  const { t, deviceId } = await setup();
+  const legacy = Array.from({ length: 220 }, (_, i) => ({
+    ...node,
+    id: `legacy${i}`,
+    title: '界'.repeat(1000),
+  }));
+  legacy[0].title = 'short';
+  await t.run(async (ctx) => {
+    const device = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(device.collectionId, { nodes: legacy });
+  });
+  const desired = [
+    { ...node, id: 'fresh' },
+    ...legacy
+      .filter((_, i) => i === 0 || i > 40)
+      .map((n) => (n.id === 'legacy0' ? { ...n, title: '界'.repeat(1000) } : n)),
+  ];
+  const operations = diff(legacy, desired, 0);
+  expect(operations.slice(0, 2).map((op) => op.kind)).toEqual(['create', 'update']);
+  const response = await t.mutation(api.sync.push, { deviceId, operations });
+  expect(response.acknowledged).toEqual(operations.map((op) => op.id));
+  const snapshot = await t.query(api.sync.snapshot, { deviceId });
+  expect(snapshot.nodes).toHaveLength(181);
+  expect(snapshot.nodes.find((n) => n.id === 'fresh')).toBeDefined();
+  expect(snapshot.nodes.find((n) => n.id === 'legacy0')?.title).toBe('界'.repeat(1000));
+  expect(new TextEncoder().encode(JSON.stringify(snapshot.nodes)).byteLength).toBeLessThan(600_000);
+  expect(await t.run((ctx) => ctx.db.query('retiredNodes').collect())).toHaveLength(40);
+});
+
+it('acknowledges unchanged legacy snapshots after lost responses, expiry and retired conflicts', async () => {
+  const { t, deviceId } = await setup();
+  const legacy = Array.from({ length: 220 }, (_, i) => ({
+    ...node,
+    id: `legacy${i}`,
+    title: '界'.repeat(1000),
+  }));
+  await t.run(async (ctx) => {
+    const device = (await ctx.db.get(deviceId))!;
+    await ctx.db.patch(device.collectionId, { nodes: legacy });
+  });
+  const operations = [
+    { id: 'shrink', sequence: 1, nodeId: 'legacy0', kind: 'delete' as const, baseRevision: 0 },
+  ];
+  await t.mutation(api.sync.push, { deviceId, operations });
+  const committed = await t.query(api.sync.snapshot, { deviceId });
+  expect(new TextEncoder().encode(JSON.stringify(committed.nodes)).byteLength).toBeGreaterThan(
+    600_000,
+  );
+  expect((await t.mutation(api.sync.push, { deviceId, operations })).acknowledged).toEqual([
+    'shrink',
+  ]);
+  expect((await t.query(api.sync.snapshot, { deviceId })).revision).toBe(committed.revision);
+  await t.run(async (ctx) => {
+    for (const op of await ctx.db.query('operations').collect())
+      await ctx.db.patch(op._id, { at: Date.now() - 31 * 86400000 });
+  });
+  await t.mutation(internal.maintenance.expireRetention, {});
+  expect((await t.mutation(api.sync.push, { deviceId, operations })).acknowledged).toEqual([
+    'shrink',
+  ]);
+  expect((await t.mutation(api.sync.push, { deviceId, operations: [] })).acknowledged).toEqual([]);
+  const conflicts = [
+    {
+      id: 'stale-create',
+      sequence: 2,
+      nodeId: 'legacy0',
+      kind: 'create' as const,
+      baseRevision: 0,
+      node: legacy[0],
+    },
+  ];
+  expect(
+    (await t.mutation(api.sync.push, { deviceId, operations: conflicts })).acknowledged,
+  ).toEqual(['stale-create']);
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes).toEqual(committed.nodes);
+  await t.mutation(api.sync.push, {
+    deviceId,
+    operations: [
+      { id: 'continue', sequence: 3, nodeId: 'legacy1', kind: 'delete', baseRevision: 0 },
+    ],
+  });
+  expect((await t.query(api.sync.snapshot, { deviceId })).nodes).toHaveLength(218);
 });

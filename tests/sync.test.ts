@@ -119,3 +119,11 @@ describe('canonical synchronization', () => {
     expect(() => validateTree([bookmark('a', { title: 'x'.repeat(1001) })])).toThrow('Invalid');
   });
 });
+
+it('enforces capacity using UTF-8 bytes for non-ASCII bookmark data', () => {
+  const nodes = Array.from({ length: 220 }, (_, i) =>
+    bookmark(`unicode${i}`, { title: '界'.repeat(1000) }),
+  );
+  expect(JSON.stringify(nodes).length).toBeLessThan(600_000);
+  expect(() => validateTree(nodes)).toThrow('600 KB');
+});

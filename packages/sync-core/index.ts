@@ -1,6 +1,7 @@
 import {
   isRoot,
   validateTree,
+  validateTreeStructure,
   type ActivityKind,
   type Node,
   type Operation,
@@ -36,6 +37,7 @@ export function applyOperation(
   nodes: Node[],
   op: Operation,
   revision: number,
+  deferCapacity = false,
 ): { nodes: Node[]; before?: Node; after?: Node; conflict: boolean } {
   const map = new Map(nodes.map((n) => [n.id, { ...n }]));
   const before = map.get(op.nodeId);
@@ -91,7 +93,10 @@ export function applyOperation(
     }
   }
   const result = [...map.values()];
-  validateTree(result);
+  // The backend checks capacity once on the final compacted atomic batch.
+  // Intermediate trees must still obey every identity and structure invariant.
+  if (deferCapacity) validateTreeStructure(result);
+  else validateTree(result);
   return { nodes: result, before, after, conflict };
 }
 // Title/URL edits, reorders within a folder, stale edits to tombstones and

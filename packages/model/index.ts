@@ -63,11 +63,24 @@ export const count = (nodes: Node[]) => ({
   folders: alive(nodes).filter((n) => n.kind === 'folder').length,
 });
 export const MAX_NODES = 2000;
-export function validateTree(nodes: Node[]) {
-  if (nodes.length > MAX_NODES || JSON.stringify(nodes).length > 600_000)
+// A legacy snapshot may exceed the UTF-8 budget. Permit strictly shrinking
+// transitions while preserving all structural checks and forbidding count growth.
+export function validateTree(nodes: Node[], previous?: Node[]) {
+  const bytes = new TextEncoder().encode(JSON.stringify(nodes)).byteLength;
+  const shrinking =
+    previous &&
+    nodes.length <= previous.length &&
+    bytes < new TextEncoder().encode(JSON.stringify(previous)).byteLength &&
+    (nodes.length <= MAX_NODES || nodes.length < previous.length);
+  if ((nodes.length > MAX_NODES || bytes > 600_000) && !shrinking)
     throw new Error(
-      'This account supports up to 2,000 bookmark records and 600 KB, including saved records of deleted bookmarks.',
+      'This v0 supports up to 2,000 records and 600 KB per collection, including pending recovery records.',
     );
+  validateTreeStructure(nodes);
+}
+
+// Capacity may be checked at the end of an atomic batch; structure never waits.
+export function validateTreeStructure(nodes: Node[]) {
   const map = new Map(nodes.map((n) => [n.id, n]));
   if (map.size !== nodes.length) throw new Error('Crossmark found duplicate bookmark data.');
   for (const n of nodes) {

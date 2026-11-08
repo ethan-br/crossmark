@@ -198,6 +198,7 @@ it('deletes only the authenticated account and requires its password', async () 
         conflict: false,
       });
       await ctx.db.insert('backups', { collectionId, deviceId, nodes: [], at: 0, reason: 'test' });
+      await ctx.db.insert('retiredNodes', { collectionId, nodeId: 'deleted-bookmark' });
     }
   });
   const remove = (password?: string) =>
@@ -218,6 +219,7 @@ it('deletes only the authenticated account and requires its password', async () 
     expect(await ctx.db.query('devices').collect()).toHaveLength(1);
     expect(await ctx.db.query('backups').collect()).toHaveLength(1);
     expect(await ctx.db.query('operations').collect()).toHaveLength(1);
+    expect(await ctx.db.query('retiredNodes').collect()).toHaveLength(1);
   });
   expect((await request(t, '/sign-in/email', account)).status).toBe(401);
 });

@@ -61,3 +61,23 @@ export const clearAppBatch = internalMutation({
     return docs.length;
   },
 });
+
+// Bounded transactions also handle existing deployments with a retention backlog.
+export const expireRetention = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const history = await ctx.db
+      .query('operations')
+      .withIndex('by_at', (q) => q.lt('at', now - 30 * 86400000))
+      .take(100);
+    const backups = await ctx.db
+      .query('backups')
+      .withIndex('by_at', (q) => q.lt('at', now - 7 * 86400000))
+      .take(20);
+    for (const row of [...history, ...backups]) await ctx.db.delete(row._id);
+    if (history.length === 100 || backups.length === 20)
+      await ctx.scheduler.runAfter(0, internal.maintenance.expireRetention, {});
+    return { operations: history.length, backups: backups.length };
+  },
+});

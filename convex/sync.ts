@@ -5,6 +5,16 @@ import { authComponent } from './auth';
 import type { Id } from './_generated/dataModel';
 import { validateTree, type Activity, type Node, type Operation } from '../packages/model';
 import { activityKind, applyOperation } from '../packages/sync-core';
+async function compactDeleted(ctx: MutationCtx, collectionId: Id<'collections'>, nodes: Node[]) {
+  for (const n of nodes.filter((n) => n.deleted)) {
+    const existing = await ctx.db
+      .query('retiredNodes')
+      .withIndex('by_node', (q) => q.eq('collectionId', collectionId).eq('nodeId', n.id))
+      .unique();
+    if (!existing) await ctx.db.insert('retiredNodes', { collectionId, nodeId: n.id });
+  }
+  return nodes.filter((n) => !n.deleted);
+}
 const fail = (message: string): never => {
   throw new ConvexError(message);
 };
@@ -71,7 +81,9 @@ export const connect = mutation({
       validateTree(args.nodes);
       const collectionId = await ctx.db.insert('collections', {
         ownerId: user._id,
-        nodes: args.nodes.map((n) => ({ ...n, revision: 1, deleted: false })),
+        nodes: args.nodes
+          .filter((n) => !n.deleted)
+          .map((n) => ({ ...n, revision: 1, deleted: false })),
         revision: 1,
         sourceDevice: args.installationId,
         createdAt: Date.now(),
@@ -99,15 +111,27 @@ export const connect = mutation({
     });
     if (joining && args.choice === 'local') {
       validateTree(args.nodes);
-      // Keep old identities as tombstones so delayed edits cannot revive the replaced tree.
+      // Fence replaced identities so delayed edits cannot revive the old tree.
       const revision = collection.revision + 1;
       const oldIds = new Set(collection.nodes.map((n) => n.id));
       if (args.nodes.some((n) => oldIds.has(n.id)))
         fail('Crossmark could not prepare the replacement bookmarks. Cancel and connect again.');
-      const nodes = [
-        ...collection.nodes.map((n) => ({ ...n, deleted: true, revision })),
-        ...args.nodes.map((n) => ({ ...n, revision, deleted: false })),
-      ];
+      for (const n of args.nodes) {
+        const retired = await ctx.db
+          .query('retiredNodes')
+          .withIndex('by_node', (q) => q.eq('collectionId', collection!._id).eq('nodeId', n.id))
+          .unique();
+        if (retired)
+          fail('Crossmark could not prepare the replacement bookmarks. Cancel and connect again.');
+      }
+      await compactDeleted(
+        ctx,
+        collection._id,
+        collection.nodes.map((n) => ({ ...n, deleted: true, revision })),
+      );
+      const nodes = args.nodes
+        .filter((n) => !n.deleted)
+        .map((n) => ({ ...n, revision, deleted: false }));
       validateTree(nodes);
       await ctx.db.insert('backups', {
         collectionId: collection._id,
@@ -223,9 +247,14 @@ export const push = mutation({
     const collection = await ctx.db.get(device.collectionId);
     if (!collection)
       return fail('The account’s synced bookmarks are unavailable. Try again later.');
-    if (operations.length > 500 || JSON.stringify(operations).length > 600_000)
+    if (
+      operations.length > 500 ||
+      new TextEncoder().encode(JSON.stringify(operations)).byteLength > 600_000
+    )
       fail('Too many bookmark changes to send at once.');
-    let nodes: Node[] = collection.nodes;
+    // Move legacy/full tombstones out of the bounded snapshot atomically.
+    let nodes: Node[] = await compactDeleted(ctx, collection._id, collection.nodes);
+    const beforeBatch = nodes;
     let revision = collection.revision;
     let sequence = device.sequence;
     const acknowledged: string[] = [];
@@ -233,11 +262,25 @@ export const push = mutation({
       if (
         op.id.length > 100 ||
         !Number.isSafeInteger(op.sequence) ||
+        op.sequence < 1 ||
         !Number.isSafeInteger(op.baseRevision) ||
         op.baseRevision < 0 ||
         op.baseRevision > revision
       )
         fail('Invalid operation version.');
+      // Sequence is the durable receipt after detailed history has expired.
+      if (op.sequence <= sequence) {
+        const receipt = await ctx.db
+          .query('operations')
+          .withIndex('by_sequence', (q) => q.eq('deviceId', device._id).eq('sequence', op.sequence))
+          .unique();
+        if (receipt && receipt.operationId !== op.id)
+          fail(
+            'This browser reused a sync sequence. Export local bookmarks, then disconnect and reconnect.',
+          );
+        acknowledged.push(op.id);
+        continue;
+      }
       const existing = await ctx.db
         .query('operations')
         .withIndex('by_operation', (q) => q.eq('deviceId', device._id).eq('operationId', op.id))
@@ -248,8 +291,27 @@ export const push = mutation({
       }
       if (op.sequence !== sequence + 1)
         fail('Some earlier bookmark changes have not been sent. Retry syncing first.');
-      const result = applyOperation(nodes, op, ++revision);
-      nodes = result.nodes;
+      const retired = await ctx.db
+        .query('retiredNodes')
+        .withIndex('by_node', (q) => q.eq('collectionId', collection._id).eq('nodeId', op.nodeId))
+        .unique();
+      const prior =
+        retired && op.kind === 'update'
+          ? await ctx.db
+              .query('operations')
+              .withIndex('by_node', (q) =>
+                q.eq('collectionId', collection._id).eq('nodeId', op.nodeId),
+              )
+              .order('desc')
+              .first()
+          : undefined;
+      ++revision;
+      // Stale create/restore/update/delete all drain as conflicts. Never recreate
+      // a retired identity, even for an arbitrarily old offline installation.
+      const result = retired
+        ? { nodes, before: prior?.after, after: prior?.after, conflict: true }
+        : applyOperation(nodes, op, revision, true);
+      nodes = await compactDeleted(ctx, collection._id, result.nodes);
       sequence = op.sequence;
       await ctx.db.insert('operations', {
         collectionId: device.collectionId,
@@ -271,6 +333,12 @@ export const push = mutation({
       });
       acknowledged.push(op.id);
     }
+    // A queued create/growing edit can precede deletes in the durable outbox.
+    // Validate only the net persisted snapshot, rolling back all fences/receipts
+    // if the batch neither fits nor strictly shrinks a legacy over-budget tree.
+    // Receipt-only retries and retired-identity conflicts must drain even while
+    // a legacy snapshot is over budget. They cannot increase stored capacity.
+    if (JSON.stringify(nodes) !== JSON.stringify(beforeBatch)) validateTree(nodes, beforeBatch);
     await ctx.db.patch(collection._id, { nodes, revision });
     await ctx.db.patch(device._id, { sequence, lastSeen: Date.now() });
     return { acknowledged, revision };
@@ -315,6 +383,13 @@ export const backup = mutation({
   handler: async (ctx, { deviceId, nodes, reason }) => {
     const device = await authenticate(ctx, deviceId);
     validateTree(nodes);
+    const recent = await ctx.db
+      .query('backups')
+      .withIndex('by_collection', (q) => q.eq('collectionId', device.collectionId))
+      .order('desc')
+      .take(20);
+    // Keep at most ten recent backups once any legacy backlog has expired.
+    for (const old of recent.slice(9)) await ctx.db.delete(old._id);
     await ctx.db.insert('backups', {
       collectionId: device.collectionId,
       deviceId: device._id,

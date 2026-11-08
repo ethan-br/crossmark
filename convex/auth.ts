@@ -26,7 +26,7 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
           .withIndex('by_owner', (q) => q.eq('ownerId', user._id))
           .collect();
         for (const collection of collections) {
-          for (const table of ['operations', 'backups', 'devices'] as const) {
+          for (const table of ['operations', 'backups', 'retiredNodes', 'devices'] as const) {
             const rows = await ctx.db
               .query(table)
               .withIndex('by_collection', (q) => q.eq('collectionId', collection._id))
