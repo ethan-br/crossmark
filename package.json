@@ -6,7 +6,8 @@
   "scripts": {
     "backend": "convex dev",
     "build": "npm run typecheck && wxt build && wxt build -b firefox",
-    "typecheck": "wxt prepare && tsc --noEmit",
+    "typecheck": "wxt prepare && tsc --noEmit && npm run typecheck:backend",
+    "typecheck:backend": "convex typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run build && npm test",
