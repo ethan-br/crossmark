@@ -33,7 +33,7 @@ Use Node.js 22 or newer. Run `npm install` (or `npm ci` for the lockfile); its `
 
 WXT calls the Chromium target `chrome`; a config hook retains the existing `dist/chromium` path. Development output goes to `dist/chromium-dev` and `dist/firefox-dev`. It includes WXT's local reload tooling and development permissions/CSP additions. The development-only `connect-src` additions allow the selected WXT server and its WebSocket; production keeps the original backend-only policy. Install or distribute the production output from `npm run build`.
 
-WXT opens disposable profiles by default. `wxt.config.ts` points `webExt.binaries` at `CHROME_BINARY` / `FIREFOX_BINARY` when set, otherwise the usual Chrome/Helium/Firefox install paths for this machine. Chrome is launched with `--disable-features=DisableLoadExtensionCommandLineSwitch` so `--load-extension` still works on Chrome 137+. Set `WXT_OPEN_BROWSER=0` to skip opening a window.
+WXT opens disposable profiles by default. `wxt.config.ts` points `webExt.binaries` at `CHROME_BINARY` / `FIREFOX_BINARY` when set, otherwise the usual Chrome/Helium/Firefox install paths for this machine. The installed web-ext 10.7 runner loads Chromium extensions through the DevTools `Extensions.loadUnpacked` API (with `--remote-debugging-pipe` and `--enable-unsafe-extension-debugging`), so current Chrome works without `--load-extension`. The obsolete `DisableLoadExtensionCommandLineSwitch` workaround is not needed. Set `WXT_OPEN_BROWSER=0` to skip opening a window.
 
 For a personal binary, persistent Chromium profile or always-disabled launcher, create an ignored `web-ext.config.ts` at the repository root; it overrides the shared `webExt` config:
 
@@ -49,6 +49,12 @@ export default defineWebExtConfig({
   // Set disabled: true to load the dev build manually instead of opening a browser.
 });
 ```
+
+### Direct launches and manual Chrome loading
+
+Branded Google Chrome 157 ignores `--load-extension` and `--disable-extensions-except`, even with the former `--disable-features=DisableLoadExtensionCommandLineSwitch` workaround. A custom launch using those flags can open a browser without Crossmark; this does not mean `npm run dev` fails, because WXT uses web-ext's CDP loading path. Helium 0.21.1.1 still accepts the flags, but Crossmark's WXT workflow does not require them.
+
+For manual Chrome development, run `WXT_OPEN_BROWSER=0 npm run dev`, open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `dist/chromium-dev`. Keep WXT running for development reloads. For a production install, select `dist/chromium` after `npm run build`.
 
 When loading Chromium development output manually, enable **Developer mode** in the extensions manager so background reloads remain enabled. Keep any optional persistent development profiles under the ignored `.wxt/` directory, never in source directories or a personal browser profile.
 
