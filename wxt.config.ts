@@ -66,8 +66,7 @@ export default defineConfig({
   }),
   webExt: {
     binaries: browserBinaries(),
-    // Chrome 137+ dropped --load-extension unless this feature flag is disabled.
-    chromiumArgs: ['--disable-features=DisableLoadExtensionCommandLineSwitch'],
+    // web-ext 10.7 loads Chromium extensions through CDP, without --load-extension.
     disabled: process.env.WXT_OPEN_BROWSER === '0',
   },
   hooks: {

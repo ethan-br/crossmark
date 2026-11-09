@@ -53,7 +53,11 @@ npm run dev:firefox  # Firefox
 
 WXT opens the extension in a disposable browser profile and reloads it as files change. Development builds use `dist/chromium-dev` and `dist/firefox-dev`, separately from production artifacts. The popup supports React hot updates; background changes restart the extension. There is no standalone web preview or preview tunnel.
 
-`npm run dev` opens Google Chrome when it is installed at the usual macOS, Linux, or Windows path; `npm run dev:firefox` opens Firefox the same way. Override with `CHROME_BINARY` / `CHROMIUM_BINARY` or `FIREFOX_BINARY`. Set `WXT_OPEN_BROWSER=0` to build the dev extension without launching a window. Personal persistent profiles belong in an ignored `web-ext.config.ts`; see [the WXT migration guide](docs/wxt-migration.md). `npm install` generates ignored WXT types automatically; `npm run typecheck` regenerates them when needed.
+`npm run dev` opens Google Chrome when it is installed at the usual macOS, Linux, or Windows path; `npm run dev:firefox` opens Firefox the same way. Override with `CHROME_BINARY` / `CHROMIUM_BINARY` or `FIREFOX_BINARY`. Set `WXT_OPEN_BROWSER=0` to build the dev extension without launching a window.
+
+Current WXT/web-ext loads Chrome extensions through the DevTools API; direct launches with `--load-extension` / `--disable-extensions-except` no longer work in branded Chrome 157. For manual development loading, run `WXT_OPEN_BROWSER=0 npm run dev`, then enable **Developer mode** in `chrome://extensions`, choose **Load unpacked**, and select `dist/chromium-dev` while WXT stays running.
+
+Personal persistent profiles belong in an ignored `web-ext.config.ts`; see [the WXT migration guide](docs/wxt-migration.md). `npm install` generates ignored WXT types automatically; `npm run typecheck` regenerates them when needed.
 
 ## Login setup
 
